@@ -1,0 +1,56 @@
+CREATE TABLE Expense (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    amount REAL NOT NULL,
+    categoryId INTEGER NOT NULL,
+    description TEXT NOT NULL,
+    date INTEGER NOT NULL,
+    createdAt INTEGER NOT NULL,
+    FOREIGN KEY (categoryId) REFERENCES Category(id)
+);
+
+CREATE INDEX expense_date_idx ON Expense(date DESC);
+CREATE INDEX expense_category_idx ON Expense(categoryId);
+
+selectAll:
+SELECT Expense.*, Category.name AS categoryName, Category.icon AS categoryIcon, Category.colorHex AS categoryColorHex
+FROM Expense
+INNER JOIN Category ON Expense.categoryId = Category.id
+ORDER BY date DESC;
+
+selectById:
+SELECT Expense.*, Category.name AS categoryName, Category.icon AS categoryIcon, Category.colorHex AS categoryColorHex
+FROM Expense
+INNER JOIN Category ON Expense.categoryId = Category.id
+WHERE Expense.id = ?;
+
+selectByDateRange:
+SELECT Expense.*, Category.name AS categoryName, Category.icon AS categoryIcon, Category.colorHex AS categoryColorHex
+FROM Expense
+INNER JOIN Category ON Expense.categoryId = Category.id
+WHERE date >= ? AND date < ?
+ORDER BY date DESC;
+
+selectTotalByCategory:
+SELECT Category.id, Category.name, Category.icon, Category.colorHex, SUM(Expense.amount) AS total
+FROM Expense
+INNER JOIN Category ON Expense.categoryId = Category.id
+WHERE Expense.date >= ? AND Expense.date < ?
+GROUP BY Category.id
+ORDER BY total DESC;
+
+selectMonthlyTotal:
+SELECT COALESCE(SUM(amount), 0.0) AS total
+FROM Expense
+WHERE date >= ? AND date < ?;
+
+insert:
+INSERT INTO Expense (amount, categoryId, description, date, createdAt) VALUES (?, ?, ?, ?, ?);
+
+update:
+UPDATE Expense SET amount = ?, categoryId = ?, description = ?, date = ? WHERE id = ?;
+
+deleteById:
+DELETE FROM Expense WHERE id = ?;
+
+deleteAll:
+DELETE FROM Expense;

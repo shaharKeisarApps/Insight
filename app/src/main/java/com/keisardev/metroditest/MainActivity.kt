@@ -7,9 +7,9 @@ import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.AccountBox
-import androidx.compose.material.icons.filled.Favorite
-import androidx.compose.material.icons.filled.Home
+import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Receipt
+import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
@@ -21,9 +21,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.keisardev.metroditest.di.ActivityKey
 import com.keisardev.metroditest.di.AppScope
-import com.keisardev.metroditest.screens.FavoritesScreen
-import com.keisardev.metroditest.screens.HomeScreen
-import com.keisardev.metroditest.screens.ProfileScreen
+import com.keisardev.metroditest.screens.ExpensesScreen
+import com.keisardev.metroditest.screens.ReportsScreen
+import com.keisardev.metroditest.screens.SettingsScreen
 import com.keisardev.metroditest.ui.theme.MetroDITestTheme
 import com.slack.circuit.backstack.rememberSaveableBackStack
 import com.slack.circuit.foundation.Circuit
@@ -60,7 +60,7 @@ class MainActivity(
 @Composable
 fun MainContent() {
     // Create a saveable back stack that persists across config changes and process death
-    val backStack = rememberSaveableBackStack(root = HomeScreen)
+    val backStack = rememberSaveableBackStack(root = ExpensesScreen)
     val navigator = rememberCircuitNavigator(backStack) {
         // Called when the root screen is popped - typically exit the app
     }
@@ -71,7 +71,7 @@ fun MainContent() {
             // Find which destination matches the root of the current back stack
             val rootScreen = backStack.firstOrNull()?.screen
             AppDestinations.entries.find { it.screen::class == rootScreen?.let { s -> s::class } }
-                ?: AppDestinations.HOME
+                ?: AppDestinations.EXPENSES
         }
     }
 
@@ -114,7 +114,7 @@ enum class AppDestinations(
     val icon: ImageVector,
     val screen: Screen,
 ) {
-    HOME("Home", Icons.Default.Home, HomeScreen),
-    FAVORITES("Favorites", Icons.Default.Favorite, FavoritesScreen),
-    PROFILE("Profile", Icons.Default.AccountBox, ProfileScreen),
+    EXPENSES("Expenses", Icons.Default.Receipt, ExpensesScreen),
+    REPORTS("Reports", Icons.Default.BarChart, ReportsScreen),
+    SETTINGS("Settings", Icons.Default.Settings, SettingsScreen),
 }

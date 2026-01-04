@@ -1,9 +1,11 @@
 plugins {
     alias(libs.plugins.android.application)
+    alias(libs.plugins.kotlin.android)
     alias(libs.plugins.kotlin.compose)
     alias(libs.plugins.kotlin.parcelize)
     alias(libs.plugins.ksp)
     alias(libs.plugins.metro)
+    alias(libs.plugins.sqldelight)
 }
 
 android {
@@ -42,6 +44,12 @@ android {
     }
 }
 
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+    }
+}
+
 ksp {
     arg("circuit.codegen.mode", "metro")
 }
@@ -66,6 +74,13 @@ dependencies {
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
 
+    // SQLDelight
+    implementation(libs.sqldelight.android.driver)
+    implementation(libs.sqldelight.coroutines)
+
+    // DateTime
+    implementation(libs.kotlinx.datetime)
+
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
@@ -73,4 +88,13 @@ dependencies {
     androidTestImplementation(libs.androidx.compose.ui.test.junit4)
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
+}
+
+sqldelight {
+    databases {
+        create("ExpenseDatabase") {
+            packageName.set("com.keisardev.metroditest.data.db")
+            srcDirs.setFrom("src/main/sqldelight")
+        }
+    }
 }
