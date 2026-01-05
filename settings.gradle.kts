@@ -1,4 +1,5 @@
 pluginManagement {
+    includeBuild("build-logic")
     repositories {
         google {
             content {
@@ -20,5 +21,20 @@ dependencyResolutionManagement {
 }
 
 rootProject.name = "MetroDITest"
+
+// Application
 include(":app")
+
+// Core modules
+include(":core:common")
+include(":core:model")
+include(":core:database")
+include(":core:data")
+include(":core:designsystem")
+include(":core:ui")
+
+// Feature modules
+include(":feature:expenses")
+include(":feature:reports")
+include(":feature:settings")
  

@@ -3,7 +3,8 @@ package com.keisardev.metroditest.di
 import android.app.Activity
 import android.app.Application
 import com.keisardev.metroditest.MetroDITestApp
-import com.keisardev.metroditest.data.repository.CategoryRepository
+import com.keisardev.metroditest.core.common.di.AppScope
+import com.keisardev.metroditest.core.data.repository.CategoryRepository
 import dev.zacsweers.metro.DependencyGraph
 import dev.zacsweers.metro.Provides
 import dev.zacsweers.metro.Provider

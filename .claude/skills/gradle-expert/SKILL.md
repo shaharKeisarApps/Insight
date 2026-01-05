@@ -694,6 +694,230 @@ tasks.matching { it.name.contains("compile") && it.name.contains("Kotlin") }.con
 }
 ```
 
+## AGP Version Compatibility
+
+### Known Compatibility Issues
+
+| AGP Version | Issue | Solution |
+|-------------|-------|----------|
+| 9.0-alpha | SQLDelight fails with "KotlinSourceSet not found" | Use AGP 8.x |
+| 9.0-alpha | Many KSP plugins incompatible | Use AGP 8.x until stable |
+| 9.0-alpha | Robolectric compatibility issues | Use AGP 8.x |
+
+> **Recommendation**: Use stable AGP 8.x versions for production projects until AGP 9.0 reaches stable.
+
+## JVM Target Configuration
+
+Ensure Java and Kotlin JVM targets match to avoid bytecode incompatibility:
+
+```kotlin
+// build.gradle.kts - NEW syntax (Kotlin 2.0+)
+android {
+    compileOptions {
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
+    }
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
+    }
+}
+
+// OLD syntax (deprecated in Kotlin 2.0+) - AVOID
+android {
+    kotlinOptions {
+        jvmTarget = "21"  // Deprecated!
+    }
+}
+```
+
+> **Important**: The `kotlinOptions` DSL inside `android {}` is deprecated. Use the top-level `kotlin { compilerOptions {} }` block instead.
+
+### Java Version Support
+
+| Java Version | Status | Notes |
+|-------------|--------|-------|
+| JVM 11 | Stable | Minimum for Android |
+| JVM 17 | Stable | Recommended for most projects |
+| JVM 21 | **Recommended** | LTS, full tooling support (Robolectric, etc.) |
+| JVM 23 | Limited | Cutting-edge, but Robolectric not supported yet |
+
+> **Recommendation**: Use Java 21 for projects requiring Robolectric unit tests. Robolectric 4.16 does not yet support Java 23.
+
+## NowInAndroid Modularization Pattern
+
+### Module Dependency Rules
+
+```
+Feature modules:
+  ✅ Can depend on: core modules (model, data, ui, designsystem, common)
+  ❌ Cannot depend on: other feature modules
+
+Core modules:
+  ✅ Can depend on: other core modules
+  ❌ Cannot depend on: feature modules
+
+App module:
+  ✅ Depends on: all feature modules + all core modules
+```
+
+### Recommended Module Structure
+
+```
+project/
+├── app/                      # Application shell, aggregates features
+├── build-logic/convention/   # Convention plugins
+├── core/
+│   ├── common/               # Shared utilities, DI scopes (AppScope)
+│   ├── model/                # Pure data models (NO Compose dependencies!)
+│   ├── database/             # Database setup + queries
+│   ├── data/                 # Repositories
+│   ├── designsystem/         # Theme, colors, typography
+│   └── ui/                   # Shared composables
+└── feature/
+    ├── feature-a/            # Screen + Presenter + UI
+    ├── feature-b/
+    └── feature-c/
+```
+
+### Pure Model Design
+
+**WRONG - Compose types in models break modularization:**
+```kotlin
+// core/model - BAD: Requires Compose dependency
+data class Category(
+    val id: Long,
+    val name: String,
+    val color: Color,  // Compose dependency!
+)
+```
+
+**CORRECT - Use primitives, convert in UI layer:**
+```kotlin
+// core/model - GOOD: Pure data
+data class Category(
+    val id: Long,
+    val name: String,
+    val colorHex: Long,  // Primitive
+)
+
+// core/ui - Extension to convert
+val Category.color: Color
+    get() = Color(colorHex)
+```
+
+## Android Convention Plugin Patterns
+
+### Extension Type Access
+
+**WRONG - CommonExtension cannot be retrieved directly:**
+```kotlin
+class AndroidComposeConventionPlugin : Plugin<Project> {
+    override fun apply(target: Project) {
+        // FAILS: Extension of type 'CommonExtension' does not exist
+        val extension = extensions.getByType<CommonExtension<*, *, *, *, *, *>>()
+    }
+}
+```
+
+**CORRECT - Use specific extension types:**
+```kotlin
+class AndroidComposeConventionPlugin : Plugin<Project> {
+    override fun apply(target: Project) {
+        with(target) {
+            pluginManager.apply("org.jetbrains.kotlin.plugin.compose")
+
+            // Use LibraryExtension for library modules
+            extensions.configure<LibraryExtension> {
+                buildFeatures {
+                    compose = true
+                }
+            }
+        }
+    }
+}
+```
+
+### Compose BOM in Convention Plugins
+
+Convention plugins must add BOM for version resolution:
+
+```kotlin
+class AndroidComposeConventionPlugin : Plugin<Project> {
+    override fun apply(target: Project) {
+        with(target) {
+            pluginManager.apply("org.jetbrains.kotlin.plugin.compose")
+
+            extensions.configure<LibraryExtension> {
+                buildFeatures { compose = true }
+            }
+
+            // CRITICAL: Add BOM for version resolution
+            val libs = extensions.getByType<VersionCatalogsExtension>().named("libs")
+            dependencies {
+                val bom = libs.findLibrary("androidx-compose-bom").get()
+                add("implementation", platform(bom))
+                add("androidTestImplementation", platform(bom))
+            }
+        }
+    }
+}
+```
+
+### Android Feature Module Convention Plugin
+
+Complete pattern for feature modules with Circuit + Metro:
+
+```kotlin
+class AndroidFeatureConventionPlugin : Plugin<Project> {
+    override fun apply(target: Project) {
+        with(target) {
+            with(pluginManager) {
+                apply("myapp.android.library")
+                apply("myapp.android.compose")
+                apply("org.jetbrains.kotlin.plugin.parcelize")  // For @Parcelize on Screens
+                apply("dev.zacsweers.metro")
+                apply("com.google.devtools.ksp")
+            }
+
+            extensions.configure<LibraryExtension> {
+                defaultConfig {
+                    testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
+                }
+            }
+
+            // KSP configuration for Circuit Metro mode
+            afterEvaluate {
+                extensions.findByName("ksp")?.let { ksp ->
+                    (ksp as? com.google.devtools.ksp.gradle.KspExtension)?.apply {
+                        arg("circuit.codegen.mode", "metro")
+                    }
+                }
+            }
+
+            val libs = extensions.getByType<VersionCatalogsExtension>().named("libs")
+
+            dependencies {
+                // Core module dependencies
+                add("implementation", project(":core:model"))
+                add("implementation", project(":core:data"))
+                add("implementation", project(":core:designsystem"))
+                add("implementation", project(":core:ui"))
+                add("implementation", project(":core:common"))
+
+                // Circuit dependencies
+                add("implementation", libs.findLibrary("circuit.foundation").get())
+                add("implementation", libs.findLibrary("circuit.retained").get())
+                add("implementation", libs.findLibrary("circuit.codegen.annotations").get())
+                add("ksp", libs.findLibrary("circuit.codegen").get())
+            }
+        }
+    }
+}
+```
+
 ## Troubleshooting
 
 ### Common Issues

@@ -3,8 +3,10 @@ package com.keisardev.metroditest
 import android.app.Activity
 import android.os.Bundle
 import androidx.activity.ComponentActivity
+import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.BarChart
@@ -19,12 +21,12 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.keisardev.metroditest.core.common.di.AppScope
+import com.keisardev.metroditest.core.designsystem.theme.MetroDITestTheme
 import com.keisardev.metroditest.di.ActivityKey
-import com.keisardev.metroditest.di.AppScope
-import com.keisardev.metroditest.screens.ExpensesScreen
-import com.keisardev.metroditest.screens.ReportsScreen
-import com.keisardev.metroditest.screens.SettingsScreen
-import com.keisardev.metroditest.ui.theme.MetroDITestTheme
+import com.keisardev.metroditest.feature.expenses.ExpensesScreen
+import com.keisardev.metroditest.feature.reports.ReportsScreen
+import com.keisardev.metroditest.feature.settings.SettingsScreen
 import com.slack.circuit.backstack.rememberSaveableBackStack
 import com.slack.circuit.foundation.Circuit
 import com.slack.circuit.foundation.CircuitCompositionLocals
@@ -45,15 +47,34 @@ class MainActivity(
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        enableEdgeToEdge()
 
         setContent {
-            MetroDITestTheme {
+            val darkTheme = isSystemInDarkTheme()
+
+            // Enable edge-to-edge with theme-aware system bar styling (NowInAndroid pattern)
+            enableEdgeToEdge(
+                statusBarStyle = SystemBarStyle.auto(
+                    android.graphics.Color.TRANSPARENT,
+                    android.graphics.Color.TRANSPARENT,
+                ) { darkTheme },
+                navigationBarStyle = SystemBarStyle.auto(
+                    LIGHT_SCRIM,
+                    DARK_SCRIM,
+                ) { darkTheme },
+            )
+
+            MetroDITestTheme(darkTheme = darkTheme) {
                 CircuitCompositionLocals(circuit) {
                     MainContent()
                 }
             }
         }
+    }
+
+    companion object {
+        // Scrim colors for navigation bar (from NowInAndroid)
+        private val LIGHT_SCRIM = android.graphics.Color.argb(0xe6, 0xFF, 0xFF, 0xFF)
+        private val DARK_SCRIM = android.graphics.Color.argb(0x80, 0x1b, 0x1b, 0x1b)
     }
 }
 

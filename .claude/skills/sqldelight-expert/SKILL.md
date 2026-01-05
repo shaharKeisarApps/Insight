@@ -50,6 +50,103 @@ jvmMain.dependencies {
 }
 ```
 
+## Android-Only Setup (Non-KMP)
+
+For Android-only projects, SQLDelight requires the `kotlin-android` plugin:
+
+```kotlin
+// build.gradle.kts
+plugins {
+    id("com.android.application") // or library
+    id("org.jetbrains.kotlin.android")  // REQUIRED for SQLDelight
+    id("app.cash.sqldelight")
+}
+
+sqldelight {
+    databases {
+        create("AppDatabase") {
+            packageName.set("com.app.db")
+            srcDirs.setFrom("src/main/sqldelight")  // Explicit for Android-only
+        }
+    }
+}
+
+dependencies {
+    implementation("app.cash.sqldelight:android-driver:2.2.1")
+    implementation("app.cash.sqldelight:coroutines-extensions:2.2.1")
+}
+```
+
+> **Important**: The `kotlin-android` plugin is mandatory. Without it, SQLDelight cannot find the source sets and will fail with "KotlinSourceSet with name 'main' not found".
+
+## Aggregation Query Results
+
+Aggregation queries with aliases return the primitive type directly, NOT a wrapper object:
+
+```sql
+-- Schema
+selectMonthlyTotal:
+SELECT COALESCE(SUM(amount), 0.0) AS total
+FROM expense
+WHERE date >= ? AND date < ?;
+
+selectTotalByCategory:
+SELECT Category.id, Category.name, SUM(Expense.amount) AS total
+FROM Expense
+INNER JOIN Category ON Expense.categoryId = Category.id
+WHERE Expense.date >= ? AND Expense.date < ?
+GROUP BY Category.id;
+```
+
+```kotlin
+// Usage - selectMonthlyTotal returns Double directly, NOT a wrapper object
+override fun observeMonthlyTotal(start: LocalDate, end: LocalDate): Flow<Double> {
+    return database.expenseQueries.selectMonthlyTotal(startMillis, endMillis)
+        .asFlow()
+        .mapToOneOrNull(Dispatchers.IO)
+        .map { it ?: 0.0 }  // 'it' IS the Double, not it.total
+}
+
+// For complex aggregations with multiple columns, generated class has named properties
+override fun observeTotalByCategory(start: LocalDate, end: LocalDate): Flow<Map<Category, Double>> {
+    return database.expenseQueries.selectTotalByCategory(startMillis, endMillis)
+        .asFlow()
+        .mapToList(Dispatchers.IO)
+        .map { results ->
+            results.associate { row ->
+                row.toCategory() to (row.total ?: 0.0)  // row.total exists
+            }
+        }
+}
+```
+
+## Void Operations (Update/Delete)
+
+Update and delete operations execute immediately. For interface compatibility with Unit return types:
+
+```kotlin
+// Interface expects Unit
+interface ExpenseRepository {
+    suspend fun deleteExpense(id: Long)
+    suspend fun updateExpense(expense: Expense)
+}
+
+// Implementation - explicit Unit return type for interface compliance
+override suspend fun deleteExpense(id: Long): Unit = withContext(Dispatchers.IO) {
+    database.expenseQueries.deleteById(id)
+}
+
+override suspend fun updateExpense(expense: Expense): Unit = withContext(Dispatchers.IO) {
+    database.expenseQueries.update(
+        amount = expense.amount,
+        categoryId = expense.category.id,
+        description = expense.description,
+        date = expense.date.toEpochMillis(),
+        id = expense.id,
+    )
+}
+```
+
 ## Schema Definition
 
 ### Basic Table

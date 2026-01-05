@@ -5,7 +5,6 @@ plugins {
     alias(libs.plugins.kotlin.parcelize)
     alias(libs.plugins.ksp)
     alias(libs.plugins.metro)
-    alias(libs.plugins.sqldelight)
 }
 
 android {
@@ -36,8 +35,8 @@ android {
         }
     }
     compileOptions {
-        sourceCompatibility = JavaVersion.VERSION_11
-        targetCompatibility = JavaVersion.VERSION_11
+        sourceCompatibility = JavaVersion.VERSION_21
+        targetCompatibility = JavaVersion.VERSION_21
     }
     buildFeatures {
         compose = true
@@ -46,15 +45,31 @@ android {
 
 kotlin {
     compilerOptions {
-        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_11)
+        jvmTarget.set(org.jetbrains.kotlin.gradle.dsl.JvmTarget.JVM_21)
     }
 }
 
 ksp {
     arg("circuit.codegen.mode", "metro")
+    // Pass core:common classes to Metro's KSP for scope resolution
+    arg("metro.contributing-annotations", "true")
 }
 
 dependencies {
+    // Core modules
+    api(project(":core:common"))
+    implementation(project(":core:model"))
+    implementation(project(":core:database"))
+    api(project(":core:data"))
+    implementation(project(":core:designsystem"))
+    implementation(project(":core:ui"))
+
+    // Feature modules
+    implementation(project(":feature:expenses"))
+    implementation(project(":feature:reports"))
+    implementation(project(":feature:settings"))
+
+    // AndroidX
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(libs.androidx.activity.compose)
@@ -68,20 +83,25 @@ dependencies {
 
     // Circuit
     implementation(libs.circuit.foundation)
+    implementation(libs.circuit.retained)
     implementation(libs.circuit.codegen.annotations)
     ksp(libs.circuit.codegen)
 
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
 
-    // SQLDelight
-    implementation(libs.sqldelight.android.driver)
-    implementation(libs.sqldelight.coroutines)
-
     // DateTime
     implementation(libs.kotlinx.datetime)
 
+    // Unit Testing
     testImplementation(libs.junit)
+    testImplementation(libs.circuit.test)
+    testImplementation(libs.kotlinx.coroutines.test)
+    testImplementation(libs.turbine)
+    testImplementation(libs.truth)
+    testImplementation(libs.robolectric)
+
+    // Android Testing
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
     androidTestImplementation(platform(libs.androidx.compose.bom))
@@ -90,11 +110,4 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
 
-sqldelight {
-    databases {
-        create("ExpenseDatabase") {
-            packageName.set("com.keisardev.metroditest.data.db")
-            srcDirs.setFrom("src/main/sqldelight")
-        }
-    }
-}
+

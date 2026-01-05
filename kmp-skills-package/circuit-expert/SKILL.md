@@ -61,14 +61,14 @@ fun ProfilePresenter(
     navigator: Navigator,
     userRepository: UserRepository,  // Injected by Metro
 ): ProfileScreen.State {
-    
+
     var isLoading by rememberRetained { mutableStateOf(true) }
-    
+
     val user by produceRetainedState<User?>(null, screen.userId) {
         value = userRepository.getUser(screen.userId)
         isLoading = false
     }
-    
+
     return ProfileScreen.State(
         user = user,
         isLoading = isLoading,
@@ -83,30 +83,87 @@ fun ProfilePresenter(
 }
 ```
 
-### Class-Based Presenter (For Complex Dependencies)
+### Class-Based Presenter: Non-Assisted (No Navigator/Screen Params)
+
+For presenters that only need injected dependencies (no `@Assisted` params):
 
 ```kotlin
-class ProfilePresenter @Inject constructor(
-    @Assisted private val screen: ProfileScreen,
-    @Assisted private val navigator: Navigator,
-    private val userRepository: UserRepository,
+// CORRECT - @CircuitInject directly on class, use @Inject
+@CircuitInject(ReportsScreen::class, AppScope::class)
+class ReportsPresenter @Inject constructor(
+    private val expenseRepository: ExpenseRepository,
     private val analyticsTracker: AnalyticsTracker,
-) : Presenter<ProfileScreen.State> {
-    
+) : Presenter<ReportsScreen.State> {
+
     @Composable
-    override fun present(): ProfileScreen.State {
-        // Same implementation as function-based
+    override fun present(): ReportsScreen.State {
+        // Implementation
     }
-    
-    @CircuitInject(ProfileScreen::class, AppScope::class)
+}
+
+// NO Factory needed for non-assisted presenters!
+```
+
+### Class-Based Presenter: Assisted (With Navigator/Screen Params)
+
+For presenters that need runtime parameters (navigator, screen):
+
+```kotlin
+// CORRECT - Use @AssistedInject (NOT @Inject) with @Assisted params
+class ExpensesPresenter @AssistedInject constructor(
+    @Assisted private val screen: ExpensesScreen,
+    @Assisted private val navigator: Navigator,
+    private val expenseRepository: ExpenseRepository,
+) : Presenter<ExpensesScreen.State> {
+
+    @Composable
+    override fun present(): ExpensesScreen.State {
+        // Implementation
+    }
+
+    // Factory REQUIRED for assisted injection
+    @CircuitInject(ExpensesScreen::class, AppScope::class)
     @AssistedFactory
     fun interface Factory {
-        fun create(screen: ProfileScreen, navigator: Navigator): ProfilePresenter
+        fun create(screen: ExpensesScreen, navigator: Navigator): ExpensesPresenter
     }
 }
 ```
 
+> **Critical**: When using `@Assisted`, you MUST use `@AssistedInject` on the constructor, NOT `@Inject`. Using `@Inject` with `@Assisted` parameters will cause: "AssistedFactory target classes must have a single @AssistedInject-annotated constructor"
+
+### Choosing Presenter Pattern
+
+| Scenario | Pattern | Factory Required |
+|----------|---------|------------------|
+| Simple stateless screens | Function-based | No |
+| Needs navigator/screen params | Assisted class-based | Yes |
+| Only injected dependencies | Non-assisted class-based | No |
+| Complex dependencies + testing | Class-based (either) | Depends |
+
 ## State Retention APIs (Critical)
+
+**IMPORTANT**: Always use Circuit's retained state APIs in presenters, NOT standard Compose APIs.
+
+### Standard Compose vs Circuit Retained APIs
+
+| Standard Compose (WRONG) | Circuit Retained (CORRECT) | Purpose |
+|--------------------------|----------------------------|---------|
+| `collectAsState` | `collectAsRetainedState` | Flow collection that survives config changes |
+| `remember` | `rememberRetained` | State that survives config changes |
+| `rememberSaveable` | `rememberRetainedSaveable` | State that survives process death |
+
+```kotlin
+// WRONG - State lost on config change or back navigation
+val expenses by expenseRepository.observeAll().collectAsState(initial = emptyList())
+var selectedMonth by remember { mutableStateOf(now.month) }
+
+// CORRECT - State retained across config changes and navigation
+val expenses by expenseRepository.observeAll().collectAsRetainedState(initial = emptyList())
+var selectedMonth by rememberRetained { mutableStateOf(now.month) }
+```
+
+> **Why**: Circuit presenters may be paused/resumed during navigation. Standard Compose APIs reset state, while retained APIs preserve it across configuration changes and back stack navigation.
 
 ### rememberRetained
 Retains value across config changes AND back stack navigation. Use for UI state that shouldn't reset.
@@ -193,6 +250,66 @@ fun ProfileUi(state: ProfileScreen.State, modifier: Modifier = Modifier) {
 - All user actions go through `state.eventSink(Event)`
 - No business logic in UI - only rendering
 - Use `modifier` parameter on root composable
+
+### @Preview Functions for Circuit UI
+
+Since Circuit UI functions receive State as a parameter, previews are straightforward:
+
+```kotlin
+@CircuitInject(ProfileScreen::class, AppScope::class)
+@Composable
+fun ProfileUi(state: ProfileScreen.State, modifier: Modifier = Modifier) {
+    // UI implementation
+}
+
+// Preview functions - pass different state objects for each scenario
+@Preview(showBackground = true)
+@Composable
+private fun PreviewProfileUiLoading() {
+    YourAppTheme {
+        ProfileUi(
+            state = ProfileScreen.State(
+                isLoading = true,
+                user = null,
+                error = null,
+                eventSink = {},  // Empty lambda for previews
+            )
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun PreviewProfileUiWithData() {
+    YourAppTheme {
+        ProfileUi(
+            state = ProfileScreen.State(
+                isLoading = false,
+                user = User("John", "Doe"),
+                error = null,
+                eventSink = {},
+            )
+        )
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun PreviewProfileUiError() {
+    YourAppTheme {
+        ProfileUi(
+            state = ProfileScreen.State(
+                isLoading = false,
+                user = null,
+                error = "Failed to load profile",
+                eventSink = {},
+            )
+        )
+    }
+}
+```
+
+> **Benefits**: Circuit's state-based UI makes previews trivial - just pass different state objects to visualize each UI variation. No mocking or fake repositories needed.
 
 ## Navigation
 

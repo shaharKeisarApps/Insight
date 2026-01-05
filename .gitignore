@@ -1,15 +1,81 @@
+# Gradle
+.gradle/
+build/
+!gradle/wrapper/gradle-wrapper.jar
+!**/src/main/**/build/
+!**/src/test/**/build/
+
+# IDE - IntelliJ/Android Studio
+.idea/caches/
+.idea/libraries/
+.idea/modules.xml
+.idea/workspace.xml
+.idea/navEditor.xml
+.idea/assetWizardSettings.xml
+.idea/shelf/
 *.iml
-.gradle
-/local.properties
-/.idea/caches
-/.idea/libraries
-/.idea/modules.xml
-/.idea/workspace.xml
-/.idea/navEditor.xml
-/.idea/assetWizardSettings.xml
+
+# macOS
 .DS_Store
-/build
-/captures
-.externalNativeBuild
-.cxx
+
+# Kotlin
+*.class
+*.kotlin_module
+
+# Android
 local.properties
+*.apk
+*.aab
+*.ap_
+/captures
+.externalNativeBuild/
+.cxx/
+
+# iOS (for future KMP expansion)
+*.xcuserdata/
+*.xcworkspace/
+!*.xcworkspace/contents.xcworkspacedata
+Pods/
+DerivedData/
+*.ipa
+
+# Desktop (for future KMP expansion)
+*.dmg
+*.msi
+*.deb
+*.exe
+
+# Generated code
+**/generated/
+*.g.dart
+
+# Secrets - NEVER commit these
+*.keystore
+*.jks
+secrets.properties
+google-services.json
+GoogleService-Info.plist
+*.pem
+*.p12
+
+# Test outputs
+test-results/
+**/test-results/
+screenshots/
+paparazzi/out/
+**/snapshots/
+
+# Coverage
+coverage/
+*.exec
+*.ec
+jacoco/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+*.tmp
+*.swp
+*~

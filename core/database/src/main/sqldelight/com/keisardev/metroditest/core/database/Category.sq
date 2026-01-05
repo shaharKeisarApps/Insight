@@ -1,0 +1,21 @@
+CREATE TABLE Category (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    icon TEXT NOT NULL,
+    colorHex INTEGER NOT NULL
+);
+
+selectAll:
+SELECT * FROM Category ORDER BY name ASC;
+
+selectById:
+SELECT * FROM Category WHERE id = ?;
+
+insert:
+INSERT INTO Category (name, icon, colorHex) VALUES (?, ?, ?);
+
+deleteAll:
+DELETE FROM Category;
+
+count:
+SELECT COUNT(*) FROM Category;
