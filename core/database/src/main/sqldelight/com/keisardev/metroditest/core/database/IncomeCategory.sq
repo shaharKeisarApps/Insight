@@ -1,0 +1,21 @@
+CREATE TABLE IncomeCategory (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    name TEXT NOT NULL UNIQUE,
+    icon TEXT NOT NULL,
+    colorHex INTEGER NOT NULL
+);
+
+selectAll:
+SELECT * FROM IncomeCategory ORDER BY name ASC;
+
+selectById:
+SELECT * FROM IncomeCategory WHERE id = ?;
+
+insert:
+INSERT INTO IncomeCategory (name, icon, colorHex) VALUES (?, ?, ?);
+
+deleteAll:
+DELETE FROM IncomeCategory;
+
+count:
+SELECT COUNT(*) FROM IncomeCategory;

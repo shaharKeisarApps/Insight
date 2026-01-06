@@ -1,0 +1,57 @@
+CREATE TABLE Income (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    amount REAL NOT NULL,
+    incomeType TEXT NOT NULL,
+    categoryId INTEGER NOT NULL,
+    description TEXT NOT NULL,
+    date INTEGER NOT NULL,
+    createdAt INTEGER NOT NULL,
+    FOREIGN KEY (categoryId) REFERENCES IncomeCategory(id)
+);
+
+CREATE INDEX income_date_idx ON Income(date DESC);
+CREATE INDEX income_category_idx ON Income(categoryId);
+
+incomeSelectAll:
+SELECT Income.*, IncomeCategory.name AS categoryName, IncomeCategory.icon AS categoryIcon, IncomeCategory.colorHex AS categoryColorHex
+FROM Income
+INNER JOIN IncomeCategory ON Income.categoryId = IncomeCategory.id
+ORDER BY date DESC;
+
+incomeSelectById:
+SELECT Income.*, IncomeCategory.name AS categoryName, IncomeCategory.icon AS categoryIcon, IncomeCategory.colorHex AS categoryColorHex
+FROM Income
+INNER JOIN IncomeCategory ON Income.categoryId = IncomeCategory.id
+WHERE Income.id = ?;
+
+incomeSelectByDateRange:
+SELECT Income.*, IncomeCategory.name AS categoryName, IncomeCategory.icon AS categoryIcon, IncomeCategory.colorHex AS categoryColorHex
+FROM Income
+INNER JOIN IncomeCategory ON Income.categoryId = IncomeCategory.id
+WHERE date >= ? AND date < ?
+ORDER BY date DESC;
+
+incomeSelectTotalByCategory:
+SELECT IncomeCategory.id, IncomeCategory.name, IncomeCategory.icon, IncomeCategory.colorHex, SUM(Income.amount) AS total
+FROM Income
+INNER JOIN IncomeCategory ON Income.categoryId = IncomeCategory.id
+WHERE Income.date >= ? AND Income.date < ?
+GROUP BY IncomeCategory.id
+ORDER BY total DESC;
+
+incomeSelectMonthlyTotal:
+SELECT COALESCE(SUM(amount), 0.0) AS total
+FROM Income
+WHERE date >= ? AND date < ?;
+
+incomeInsert:
+INSERT INTO Income (amount, incomeType, categoryId, description, date, createdAt) VALUES (?, ?, ?, ?, ?, ?);
+
+incomeUpdate:
+UPDATE Income SET amount = ?, incomeType = ?, categoryId = ?, description = ?, date = ? WHERE id = ?;
+
+incomeDeleteById:
+DELETE FROM Income WHERE id = ?;
+
+incomeDeleteAll:
+DELETE FROM Income;

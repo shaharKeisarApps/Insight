@@ -17,6 +17,8 @@ kotlinxDatetime = "0.6.1"
 turbine = "1.2.0"
 truth = "1.4.4"
 robolectric = "4.16"
+koog = "0.6.0"
+ktor = "3.1.3"
 
 [libraries]
 robolectric = { module = "org.robolectric:robolectric", version.ref = "robolectric" }
@@ -56,6 +58,13 @@ compose-gradlePlugin = { module = "org.jetbrains.kotlin:compose-compiler-gradle-
 ksp-gradlePlugin = { module = "com.google.devtools.ksp:com.google.devtools.ksp.gradle.plugin", version.ref = "ksp" }
 metro-gradlePlugin = { module = "dev.zacsweers.metro:metro-gradle-plugin", version.ref = "metro" }
 sqldelight-gradlePlugin = { module = "app.cash.sqldelight:gradle-plugin", version.ref = "sqldelight" }
+
+# Koog AI Agent Framework
+koog-agents = { module = "ai.koog:koog-agents-jvm", version.ref = "koog" }
+koog-openai = { module = "ai.koog:prompt-executor-openai-client-jvm", version.ref = "koog" }
+
+# Ktor (required by Koog)
+ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

@@ -9,7 +9,9 @@ import androidx.activity.enableEdgeToEdge
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.AccountBalanceWallet
 import androidx.compose.material.icons.filled.BarChart
+import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material3.Icon
@@ -24,7 +26,9 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import com.keisardev.metroditest.core.common.di.AppScope
 import com.keisardev.metroditest.core.designsystem.theme.MetroDITestTheme
 import com.keisardev.metroditest.di.ActivityKey
+import com.keisardev.metroditest.feature.aichat.AiChatScreen
 import com.keisardev.metroditest.feature.expenses.ExpensesScreen
+import com.keisardev.metroditest.feature.income.IncomeScreen
 import com.keisardev.metroditest.feature.reports.ReportsScreen
 import com.keisardev.metroditest.feature.settings.SettingsScreen
 import com.slack.circuit.backstack.rememberSaveableBackStack
@@ -136,6 +140,8 @@ enum class AppDestinations(
     val screen: Screen,
 ) {
     EXPENSES("Expenses", Icons.Default.Receipt, ExpensesScreen),
+    INCOME("Income", Icons.Default.AccountBalanceWallet, IncomeScreen),
     REPORTS("Reports", Icons.Default.BarChart, ReportsScreen),
+    AI_CHAT("AI Chat", Icons.Default.Psychology, AiChatScreen),
     SETTINGS("Settings", Icons.Default.Settings, SettingsScreen),
 }

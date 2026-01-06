@@ -24,6 +24,7 @@ class MetroDITestApp : Application() {
         // Seed default categories on first launch
         applicationScope.launch(Dispatchers.IO) {
             appGraph.categoryRepository.seedDefaultCategories()
+            appGraph.incomeCategoryRepository.seedDefaultCategories()
         }
     }
 }

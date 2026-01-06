@@ -5,6 +5,7 @@ import android.app.Application
 import com.keisardev.metroditest.MetroDITestApp
 import com.keisardev.metroditest.core.common.di.AppScope
 import com.keisardev.metroditest.core.data.repository.CategoryRepository
+import com.keisardev.metroditest.core.data.repository.IncomeCategoryRepository
 import dev.zacsweers.metro.DependencyGraph
 import dev.zacsweers.metro.Provides
 import dev.zacsweers.metro.Provider
@@ -16,6 +17,7 @@ import kotlin.reflect.KClass
 interface AppGraph {
     val activityProviders: Map<KClass<out Activity>, Provider<Activity>>
     val categoryRepository: CategoryRepository
+    val incomeCategoryRepository: IncomeCategoryRepository
 
     fun inject(application: MetroDITestApp)
 

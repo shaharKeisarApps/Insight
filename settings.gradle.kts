@@ -32,9 +32,12 @@ include(":core:database")
 include(":core:data")
 include(":core:designsystem")
 include(":core:ui")
+include(":core:ai")
 
 // Feature modules
 include(":feature:expenses")
+include(":feature:income")
 include(":feature:reports")
 include(":feature:settings")
+include(":feature:ai-chat")
  
