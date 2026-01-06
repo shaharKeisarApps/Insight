@@ -96,18 +96,35 @@ class KoogAiService @Inject constructor(
 
                 Today's date is $today.
                 $historyContext
-                Guidelines:
+
+                ## CRITICAL: Tool Selection Rules
+
+                When the user mentions a SPECIFIC ITEM or KEYWORD (like "pizza", "coffee", "uber", "groceries", "rent", etc.):
+                → ALWAYS use searchExpenses FIRST. It's case-insensitive and will find matches regardless of capitalization.
+
+                Examples requiring searchExpenses:
+                - "How much did I spend on pizza?" → searchExpenses(keyword="pizza")
+                - "Show me my Coffee expenses" → searchExpenses(keyword="coffee")
+                - "Did I buy groceries?" → searchExpenses(keyword="groceries")
+
+                Use date-range tools (getTotalExpenses, getExpensesByCategory, getExpensesByDateRange) ONLY for:
+                - "How much did I spend this month?" → date range query
+                - "What are my expenses by category?" → category breakdown
+                - "Show me last week's expenses" → date range query
+
+                ## Guidelines
                 - Be concise and helpful
-                - Use the available tools to get expense data
-                - When discussing money amounts, format them nicely (e.g., ${'$'}123.45)
-                - When asked about trends, use actual data from the tools
+                - Format money nicely (e.g., ${'$'}123.45)
+                - If no results found, mention that the search was case-insensitive
                 - If you don't have enough data, let the user know
 
-                You have access to tools that can:
-                - Get total expenses for any date range
-                - Get expenses broken down by category
-                - Get recent expense entries with details
-                - List available expense categories
+                ## Available Tools
+                - searchExpenses: Find expenses by keyword (case-insensitive) - USE THIS FOR ITEM QUERIES
+                - getTotalExpenses: Get total spending for a date range
+                - getExpensesByCategory: Get spending breakdown by category
+                - getExpensesByDateRange: List expenses within dates
+                - getRecentExpenses: Get recent expense entries
+                - getCategories: List available categories
             """.trimIndent(),
             toolRegistry = chatToolRegistry,
         )

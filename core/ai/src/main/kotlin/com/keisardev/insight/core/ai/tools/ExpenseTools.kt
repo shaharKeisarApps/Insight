@@ -118,4 +118,35 @@ class ExpenseTools(
             "Error getting expenses: ${e.message}"
         }
     }
+
+    @Tool
+    @LLMDescription(
+        "Search for expenses by keyword. ALWAYS use this tool when the user asks about specific items " +
+            "like 'pizza', 'coffee', 'uber', 'groceries', etc. The search is case-INSENSITIVE " +
+            "(searching 'Pizza' will find 'pizza', 'PIZZA', etc.). Searches both description and category name."
+    )
+    suspend fun searchExpenses(
+        @LLMDescription("Keyword to search for (case-insensitive). Examples: 'pizza', 'coffee', 'uber'")
+        keyword: String,
+    ): String {
+        return try {
+            val allExpenses = expenseRepository.observeAllExpenses().first()
+            val matchingExpenses = allExpenses.filter { expense ->
+                expense.description.contains(keyword, ignoreCase = true) ||
+                    expense.category.name.contains(keyword, ignoreCase = true)
+            }
+
+            if (matchingExpenses.isEmpty()) {
+                "No expenses found matching '$keyword'. The search is case-insensitive and looks in both descriptions and category names."
+            } else {
+                val total = matchingExpenses.sumOf { it.amount }
+                val lines = matchingExpenses.map { expense ->
+                    "- ${expense.date}: ${expense.category.name} - $${String.format("%.2f", expense.amount)} ${if (expense.description.isNotBlank()) "(${expense.description})" else ""}"
+                }
+                "Found ${matchingExpenses.size} expense(s) matching '$keyword':\n${lines.joinToString("\n")}\n\nTotal spent on '$keyword': $${String.format("%.2f", total)}"
+            }
+        } catch (e: Exception) {
+            "Error searching expenses: ${e.message}"
+        }
+    }
 }
