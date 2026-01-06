@@ -1,10 +1,10 @@
 plugins {
-    id("metroditest.android.library")
+    id("insight.android.library")
     alias(libs.plugins.metro)
 }
 
 android {
-    namespace = "com.keisardev.metroditest.core.data"
+    namespace = "com.keisardev.insight.core.data"
 }
 
 dependencies {

@@ -20,7 +20,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "MetroDITest"
+rootProject.name = "Insight"
 
 // Application
 include(":app")

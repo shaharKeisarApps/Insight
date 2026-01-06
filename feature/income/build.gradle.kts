@@ -1,7 +1,7 @@
 plugins {
-    id("metroditest.android.feature")
+    id("insight.android.feature")
 }
 
 android {
-    namespace = "com.keisardev.metroditest.feature.income"
+    namespace = "com.keisardev.insight.feature.income"
 }

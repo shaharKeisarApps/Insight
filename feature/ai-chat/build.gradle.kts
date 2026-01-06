@@ -1,9 +1,9 @@
 plugins {
-    id("metroditest.android.feature")
+    id("insight.android.feature")
 }
 
 android {
-    namespace = "com.keisardev.metroditest.feature.aichat"
+    namespace = "com.keisardev.insight.feature.aichat"
 }
 
 dependencies {

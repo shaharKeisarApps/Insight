@@ -1,9 +1,9 @@
 plugins {
-    id("metroditest.android.library")
+    id("insight.android.library")
 }
 
 android {
-    namespace = "com.keisardev.metroditest.core.common"
+    namespace = "com.keisardev.insight.core.common"
 }
 
 dependencies {

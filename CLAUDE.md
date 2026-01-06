@@ -15,7 +15,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 ./gradlew :feature:expenses:test
 
 # Run a single test class
-./gradlew test --tests "com.keisardev.metroditest.ExampleUnitTest"
+./gradlew test --tests "com.keisardev.insight.ExampleUnitTest"
 
 # Run instrumented tests (requires device/emulator)
 ./gradlew connectedAndroidTest
@@ -39,7 +39,7 @@ Dependencies managed via version catalog at `gradle/libs.versions.toml`.
 **Multi-module structure following NowInAndroid pattern:**
 
 ```
-MetroDITest/
+Insight/
 ├── app/                 # Entry point, AppGraph, navigation
 ├── build-logic/         # Gradle convention plugins
 ├── core/
@@ -113,10 +113,10 @@ Circuit codegen configured with Metro mode in feature modules.
 ## Convention Plugins
 
 Located in `build-logic/convention/`:
-- `metroditest.android.application` - App module setup
-- `metroditest.android.library` - Library modules
-- `metroditest.android.compose` - Compose configuration + BOM
-- `metroditest.android.feature` - Feature modules with Circuit + Metro + KSP
+- `insight.android.application` - App module setup
+- `insight.android.library` - Library modules
+- `insight.android.compose` - Compose configuration + BOM
+- `insight.android.feature` - Feature modules with Circuit + Metro + KSP
 
 ## Navigation
 

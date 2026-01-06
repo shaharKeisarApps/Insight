@@ -1,4 +1,4 @@
-# MetroDITest
+# Insight
 
 A modern Android personal finance management application built with cutting-edge Kotlin technologies. Track expenses, monitor income, view financial reports, and get AI-powered insights into your spending habits.
 
@@ -33,7 +33,7 @@ A modern Android personal finance management application built with cutting-edge
 The project follows the **NowInAndroid modular architecture** pattern with clear separation of concerns:
 
 ```
-MetroDITest/
+Insight/
 ├── app/                     # Entry point, AppGraph, navigation
 ├── build-logic/             # Gradle convention plugins
 ├── core/
@@ -70,8 +70,8 @@ MetroDITest/
 
 1. **Clone the repository**
    ```bash
-   git clone https://github.com/your-username/MetroDITest.git
-   cd MetroDITest
+   git clone https://github.com/your-username/Insight.git
+   cd Insight
    ```
 
 2. **Configure AI Features (Optional)**
@@ -103,7 +103,7 @@ MetroDITest/
 ./gradlew :feature:expenses:test
 
 # Run a single test class
-./gradlew test --tests "com.keisardev.metroditest.ExampleUnitTest"
+./gradlew test --tests "com.keisardev.insight.ExampleUnitTest"
 
 # Run instrumented tests (requires device/emulator)
 ./gradlew connectedAndroidTest
@@ -196,10 +196,10 @@ The app comes pre-seeded with common expense categories:
 
 Custom Gradle plugins in `build-logic/` for consistent module configuration:
 
-- `metroditest.android.application` - App module setup
-- `metroditest.android.library` - Library modules
-- `metroditest.android.compose` - Compose configuration with BOM
-- `metroditest.android.feature` - Feature modules with Circuit + Metro + KSP
+- `insight.android.application` - App module setup
+- `insight.android.library` - Library modules
+- `insight.android.compose` - Compose configuration with BOM
+- `insight.android.feature` - Feature modules with Circuit + Metro + KSP
 
 ## License
 

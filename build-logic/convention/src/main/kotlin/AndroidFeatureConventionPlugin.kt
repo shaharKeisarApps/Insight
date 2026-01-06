@@ -10,8 +10,8 @@ class AndroidFeatureConventionPlugin : Plugin<Project> {
     override fun apply(target: Project) {
         with(target) {
             with(pluginManager) {
-                apply("metroditest.android.library")
-                apply("metroditest.android.compose")
+                apply("insight.android.library")
+                apply("insight.android.compose")
                 apply("org.jetbrains.kotlin.plugin.parcelize")
                 apply("dev.zacsweers.metro")
                 apply("com.google.devtools.ksp")

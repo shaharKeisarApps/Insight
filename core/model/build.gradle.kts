@@ -1,10 +1,10 @@
 plugins {
-    id("metroditest.android.library")
+    id("insight.android.library")
     alias(libs.plugins.kotlin.parcelize)
 }
 
 android {
-    namespace = "com.keisardev.metroditest.core.model"
+    namespace = "com.keisardev.insight.core.model"
 }
 
 dependencies {

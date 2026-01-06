@@ -1,17 +1,17 @@
 plugins {
-    id("metroditest.android.library")
+    id("insight.android.library")
     alias(libs.plugins.sqldelight)
     alias(libs.plugins.metro)
 }
 
 android {
-    namespace = "com.keisardev.metroditest.core.database"
+    namespace = "com.keisardev.insight.core.database"
 }
 
 sqldelight {
     databases {
         create("ExpenseDatabase") {
-            packageName.set("com.keisardev.metroditest.core.database")
+            packageName.set("com.keisardev.insight.core.database")
             srcDirs.setFrom("src/main/sqldelight")
         }
     }

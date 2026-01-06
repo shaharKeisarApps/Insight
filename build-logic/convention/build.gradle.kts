@@ -4,7 +4,7 @@ plugins {
     `kotlin-dsl`
 }
 
-group = "com.keisardev.metroditest.buildlogic"
+group = "com.keisardev.insight.buildlogic"
 
 java {
     sourceCompatibility = JavaVersion.VERSION_21
@@ -34,19 +34,19 @@ tasks {
 gradlePlugin {
     plugins {
         register("androidApplication") {
-            id = "metroditest.android.application"
+            id = "insight.android.application"
             implementationClass = "AndroidApplicationConventionPlugin"
         }
         register("androidLibrary") {
-            id = "metroditest.android.library"
+            id = "insight.android.library"
             implementationClass = "AndroidLibraryConventionPlugin"
         }
         register("androidCompose") {
-            id = "metroditest.android.compose"
+            id = "insight.android.compose"
             implementationClass = "AndroidComposeConventionPlugin"
         }
         register("androidFeature") {
-            id = "metroditest.android.feature"
+            id = "insight.android.feature"
             implementationClass = "AndroidFeatureConventionPlugin"
         }
     }
