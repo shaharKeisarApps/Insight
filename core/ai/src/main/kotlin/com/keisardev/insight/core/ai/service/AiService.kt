@@ -3,6 +3,22 @@ package com.keisardev.insight.core.ai.service
 import com.keisardev.insight.core.model.Category
 
 /**
+ * Represents a message in the chat conversation history.
+ */
+data class ChatMessage(
+    val role: ChatRole,
+    val content: String,
+)
+
+/**
+ * Role of a chat message participant.
+ */
+enum class ChatRole {
+    USER,
+    ASSISTANT,
+}
+
+/**
  * Service interface for AI-powered features.
  */
 interface AiService {
@@ -28,7 +44,11 @@ interface AiService {
      * The AI has access to expense data and can answer questions about spending patterns.
      *
      * @param message The user's message/question
+     * @param history Optional conversation history for multi-turn conversations
      * @return The AI's response
      */
-    suspend fun chat(message: String): String
+    suspend fun chat(
+        message: String,
+        history: List<ChatMessage> = emptyList(),
+    ): String
 }

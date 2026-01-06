@@ -73,8 +73,24 @@ class MathTools : ToolSet {
 **OpenAI:**
 ```kotlin
 val executor = simpleOpenAIExecutor(System.getenv("OPENAI_API_KEY"))
-// Models: OpenAIModels.Chat.GPT4o, GPT4oMini, etc.
 ```
+
+**OpenAI Model Tiers:**
+
+| Model | Input (per 1M) | Output (per 1M) | Best For |
+|-------|----------------|-----------------|----------|
+| GPT-5 | $1.25 | $10.00 | Complex reasoning, advanced tasks |
+| GPT-5 Mini | $0.25 | $2.00 | Balanced cost/performance |
+| GPT-5 Nano | $0.05 | $0.40 | Summarization, classification, simple tasks |
+| GPT-4o | Higher | Higher | Multimodal, vision tasks |
+| GPT-4o Mini | Lower | Lower | Cost-effective multimodal |
+
+**Model Selection Guide:**
+- `OpenAIModels.Chat.GPT5Nano` - Fastest, cheapest. Use for categorization, classification, summarization
+- `OpenAIModels.Chat.GPT5Mini` - Balanced. Use for chat, general tasks
+- `OpenAIModels.Chat.GPT5` - Most capable. Use for complex reasoning, coding
+- `OpenAIModels.Chat.GPT4o` - Multimodal. Use when vision/image support needed
+- `OpenAIModels.Chat.GPT4oMini` - Cost-effective multimodal
 
 **Anthropic:**
 ```kotlin
@@ -247,6 +263,180 @@ repositories {
 }
 ```
 
+## Performance Optimization
+
+### 1. Reuse Prompt Executors
+
+Prompt executors are expensive to create (HTTP clients, connection pools). Create once and reuse:
+
+```kotlin
+// ✅ GOOD: Create executor once, reuse for multiple agents
+class AiService @Inject constructor(config: AiConfig) {
+    // Create executor once at service initialization
+    private val executor by lazy {
+        config.apiKey?.let { simpleOpenAIExecutor(it) }
+    }
+
+    suspend fun chat(message: String): String {
+        // Create new agent (cheap) but reuse executor (expensive)
+        val agent = AIAgent(
+            promptExecutor = executor ?: error("No API key"),
+            llmModel = OpenAIModels.Chat.GPT4o,
+            systemPrompt = "You are a helpful assistant."
+        )
+        return agent.run(message)
+    }
+}
+
+// ❌ BAD: Creating executor for every request
+suspend fun chat(message: String): String {
+    val agent = AIAgent(
+        promptExecutor = simpleOpenAIExecutor(apiKey), // Expensive!
+        // ...
+    )
+}
+```
+
+### 2. Agent Lifecycle
+
+**Important**: Each `AIAgent.run()` is designed for single execution. Create new agents for each request, but reuse expensive resources:
+
+```kotlin
+// Agents are cheap to create - executors are expensive
+val executor = simpleOpenAIExecutor(apiKey) // Create once
+
+// For each request:
+val agent = AIAgent(promptExecutor = executor, /* ... */)
+val result = agent.run(input)
+```
+
+### 3. Multi-Turn Conversations with History
+
+For chat applications requiring conversation history across multiple messages:
+
+```kotlin
+data class ChatMessage(val role: String, val content: String)
+
+class ChatService(private val executor: PromptExecutor) {
+
+    suspend fun chat(
+        message: String,
+        history: List<ChatMessage>
+    ): String {
+        // Build conversation context from history
+        val conversationContext = history.joinToString("\n") {
+            "${it.role}: ${it.content}"
+        }
+
+        val agent = AIAgent(
+            promptExecutor = executor,
+            llmModel = OpenAIModels.Chat.GPT4o,
+            systemPrompt = """
+                You are a helpful assistant.
+
+                Previous conversation:
+                $conversationContext
+            """.trimIndent()
+        )
+
+        return agent.run(message)
+    }
+}
+```
+
+### 4. Session Management
+
+For advanced history management within a single agent run:
+
+```kotlin
+// Read current session state
+llm.readSession {
+    val currentMessages = prompt.messages
+    val messageCount = currentMessages.size
+}
+
+// Modify session (append messages)
+llm.writeSession {
+    appendPrompt {
+        user("User message")
+        assistant("Assistant response")
+    }
+}
+
+// Rewrite entire prompt (for trimming/compression)
+llm.writeSession {
+    rewritePrompt { oldPrompt ->
+        // Keep only system + last N messages
+        val messages = oldPrompt.messages
+        oldPrompt.copy(messages = listOf(messages.first()) + messages.takeLast(10))
+    }
+}
+```
+
+### 5. History Compression for Long Conversations
+
+Prevent token limit issues with history compression:
+
+```kotlin
+// In functional strategy
+functionalStrategy { input ->
+    var responses = requestLLMMultiple(input)
+
+    while (responses.containsToolCalls()) {
+        // Compress if token usage is high
+        if (latestTokenUsage() > 100_000) {
+            compressHistory()
+        }
+
+        val results = executeMultipleTools(extractToolCalls(responses))
+        responses = sendMultipleToolResults(results)
+    }
+
+    responses.single().asAssistantMessage().content
+}
+
+// In graph-based strategy
+val strategy = strategy<String, String>("with-compression") {
+    val callLLM by nodeLLMRequest()
+    val executeTool by nodeExecuteTool()
+    val sendToolResult by nodeLLMSendToolResult()
+    val compressHistory by nodeLLMCompressHistory<ReceivedToolResult>()
+
+    // Define when history is too long
+    suspend fun AIAgentContext.historyIsTooLong() =
+        llm.readSession { prompt.messages.size > 100 }
+
+    edge(nodeStart forwardTo callLLM)
+    edge(callLLM forwardTo nodeFinish onAssistantMessage { true })
+    edge(callLLM forwardTo executeTool onToolCall { true })
+
+    // Compress if needed
+    edge(executeTool forwardTo compressHistory onCondition { historyIsTooLong() })
+    edge(compressHistory forwardTo sendToolResult)
+    edge(executeTool forwardTo sendToolResult onCondition { !historyIsTooLong() })
+
+    edge(sendToolResult forwardTo nodeFinish onAssistantMessage { true })
+}
+```
+
+### 6. History Trimming for Stateless Tasks
+
+For tasks where only the latest context matters (like chess moves):
+
+```kotlin
+inline fun <reified T> AIAgentSubgraphBuilderBase<*, *>.nodeTrimHistory(
+    name: String? = null
+): AIAgentNodeDelegate<T, T> = node(name) {
+    llm.writeSession {
+        rewritePrompt { prompt ->
+            // Keep only system prompt and last message
+            prompt.copy(messages = listOf(prompt.messages.first(), prompt.messages.last()))
+        }
+    }
+    result
+}
+```
+
 ## Best Practices
 
 1. **Tool Design**: Keep tools focused and well-documented with `@LLMDescription`
@@ -255,6 +445,9 @@ repositories {
 4. **API Keys**: Always use environment variables for sensitive credentials
 5. **Strategy Selection**: Use `functionalStrategy` for simple tasks, graph-based for complex workflows
 6. **Temperature**: Lower values (0.0-0.3) for deterministic tasks, higher (0.7-1.0) for creative tasks
+7. **Executor Reuse**: Create prompt executors once and reuse across agent instances
+8. **History Management**: Implement compression or trimming for long-running conversations
+9. **Model Selection**: Use cheaper models (GPT4oMini) for simple tasks like categorization
 
 ## Common Patterns
 

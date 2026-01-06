@@ -45,10 +45,13 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
-import com.keisardev.insight.core.ai.service.AiService
+import com.keisardev.insight.core.ai.repository.ChatRepository
 import com.keisardev.insight.core.common.di.AppScope
 import com.keisardev.insight.core.designsystem.theme.MetroDITestTheme
+import com.keisardev.insight.core.model.ChatMessage
+import com.keisardev.insight.core.model.ChatRole
 import com.slack.circuit.codegen.annotations.CircuitInject
+import com.slack.circuit.retained.collectAsRetainedState
 import com.slack.circuit.retained.rememberRetained
 import com.slack.circuit.runtime.CircuitUiEvent
 import com.slack.circuit.runtime.CircuitUiState
@@ -60,7 +63,6 @@ import dev.zacsweers.metro.AssistedFactory
 import dev.zacsweers.metro.AssistedInject
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
-import kotlinx.datetime.Instant
 import kotlinx.parcelize.Parcelize
 
 @Parcelize
@@ -79,38 +81,34 @@ data object AiChatScreen : Screen {
     }
 }
 
-data class ChatMessage(
-    val id: String,
-    val content: String,
-    val isUser: Boolean,
-    val timestamp: Instant = Clock.System.now(),
-)
-
+/**
+ * Presenter for the AI Chat screen.
+ *
+ * Uses [ChatRepository] to manage chat state and AI interactions,
+ * following the same patterns as other features in the app.
+ */
 class AiChatPresenter @AssistedInject constructor(
     @Assisted private val navigator: Navigator,
-    private val aiService: AiService,
+    private val chatRepository: ChatRepository,
 ) : Presenter<AiChatScreen.State> {
 
     @Composable
     override fun present(): AiChatScreen.State {
-        var messages by rememberRetained { mutableStateOf(emptyList<ChatMessage>()) }
+        // Observe messages from repository (reactive, consistent with other features)
+        val messages by chatRepository.observeMessages()
+            .collectAsRetainedState(initial = emptyList())
+
+        // Observe loading state from repository
+        val isLoading by chatRepository.isLoading
+            .collectAsRetainedState(initial = false)
+
         var inputText by rememberRetained { mutableStateOf("") }
-        var isLoading by rememberRetained { mutableStateOf(false) }
         val scope = rememberCoroutineScope()
 
-        // Add welcome message on first load
+        // Initialize with welcome message on first load
         LaunchedEffect(Unit) {
-            if (messages.isEmpty() && aiService.isEnabled) {
-                messages = listOf(
-                    ChatMessage(
-                        id = "welcome",
-                        content = "Hi! I'm your financial assistant. Ask me anything about your expenses, like:\n\n" +
-                            "- \"How much did I spend this month?\"\n" +
-                            "- \"What's my biggest expense category?\"\n" +
-                            "- \"Show me my recent expenses\"",
-                        isUser = false,
-                    )
-                )
+            if (messages.isEmpty() && chatRepository.isEnabled) {
+                chatRepository.clearHistory(addWelcomeMessage = true)
             }
         }
 
@@ -118,31 +116,17 @@ class AiChatPresenter @AssistedInject constructor(
             messages = messages,
             inputText = inputText,
             isLoading = isLoading,
-            isAiEnabled = aiService.isEnabled,
+            isAiEnabled = chatRepository.isEnabled,
         ) { event ->
             when (event) {
                 is AiChatScreen.Event.OnInputChange -> inputText = event.text
                 AiChatScreen.Event.OnSend -> {
                     if (inputText.isNotBlank() && !isLoading) {
-                        val userMessage = ChatMessage(
-                            id = "user_${Clock.System.now().toEpochMilliseconds()}",
-                            content = inputText.trim(),
-                            isUser = true,
-                        )
-                        messages = messages + userMessage
-                        val query = inputText.trim()
+                        val messageToSend = inputText.trim()
                         inputText = ""
-                        isLoading = true
 
                         scope.launch {
-                            val response = aiService.chat(query)
-                            val aiMessage = ChatMessage(
-                                id = "ai_${Clock.System.now().toEpochMilliseconds()}",
-                                content = response,
-                                isUser = false,
-                            )
-                            messages = messages + aiMessage
-                            isLoading = false
+                            chatRepository.sendMessage(messageToSend)
                         }
                     }
                 }
@@ -416,12 +400,12 @@ private fun PreviewAiChatUi() {
                     ChatMessage(
                         id = "1",
                         content = "How much did I spend this month?",
-                        isUser = true,
+                        role = ChatRole.USER,
                     ),
                     ChatMessage(
                         id = "2",
-                        content = "Based on your expenses, you've spent $1,234.56 this month. Your biggest category is Food at $450.00 (36%).",
-                        isUser = false,
+                        content = "Based on your expenses, you've spent \$1,234.56 this month. Your biggest category is Food at \$450.00 (36%).",
+                        role = ChatRole.ASSISTANT,
                     ),
                 ),
                 inputText = "",
