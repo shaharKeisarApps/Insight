@@ -187,10 +187,167 @@ spotless = { id = "com.diffplug.spotless", version.ref = "spotless" }
 
 ## Convention Plugins
 
-### Build Logic Setup
+### Build Logic Setup (NowInAndroid Pattern)
+
+Convention plugins should use **version catalog aliases** for plugin IDs instead of hardcoded strings. This centralizes version management and improves maintainability.
+
+#### Step 1: Define Custom Plugin Aliases in Version Catalog
+
+```toml
+# gradle/libs.versions.toml
+
+[plugins]
+# External plugins
+android-application = { id = "com.android.application", version.ref = "agp" }
+android-library = { id = "com.android.library", version.ref = "agp" }
+kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
+kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
+kotlin-parcelize = { id = "org.jetbrains.kotlin.plugin.parcelize", version.ref = "kotlin" }
+ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
+metro = { id = "dev.zacsweeny.metro", version.ref = "metro" }
+
+# Custom convention plugins (no version needed - they're local)
+myapp-android-application = { id = "myapp.android.application" }
+myapp-android-library = { id = "myapp.android.library" }
+myapp-android-compose = { id = "myapp.android.compose" }
+myapp-android-feature = { id = "myapp.android.feature" }
+```
+
+#### Step 2: Build Logic build.gradle.kts
 
 ```kotlin
-// build-logic/build.gradle.kts
+// build-logic/convention/build.gradle.kts
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
+plugins {
+    `kotlin-dsl`
+}
+
+group = "com.myapp.buildlogic"
+
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+
+kotlin {
+    compilerOptions {
+        jvmTarget = JvmTarget.JVM_21
+    }
+}
+
+dependencies {
+    compileOnly(libs.android.gradlePlugin)
+    compileOnly(libs.kotlin.gradlePlugin)
+    compileOnly(libs.compose.gradlePlugin)
+    compileOnly(libs.ksp.gradlePlugin)
+}
+
+tasks {
+    validatePlugins {
+        enableStricterValidation = true
+        failOnWarning = true
+    }
+}
+
+// BEST PRACTICE: Register plugins using version catalog aliases
+gradlePlugin {
+    plugins {
+        register("androidApplication") {
+            id = libs.plugins.myapp.android.application.get().pluginId
+            implementationClass = "AndroidApplicationConventionPlugin"
+        }
+        register("androidLibrary") {
+            id = libs.plugins.myapp.android.library.get().pluginId
+            implementationClass = "AndroidLibraryConventionPlugin"
+        }
+        register("androidCompose") {
+            id = libs.plugins.myapp.android.compose.get().pluginId
+            implementationClass = "AndroidComposeConventionPlugin"
+        }
+        register("androidFeature") {
+            id = libs.plugins.myapp.android.feature.get().pluginId
+            implementationClass = "AndroidFeatureConventionPlugin"
+        }
+    }
+}
+```
+
+#### Step 3: Create versionCatalog Extension Property
+
+**IMPORTANT**: Name the extension `versionCatalog` (not `libs`) to avoid shadowing the type-safe accessors used in module build.gradle.kts files.
+
+```kotlin
+// build-logic/convention/src/main/kotlin/ProjectExtensions.kt
+import org.gradle.api.Project
+import org.gradle.api.artifacts.VersionCatalog
+import org.gradle.api.artifacts.VersionCatalogsExtension
+import org.gradle.kotlin.dsl.getByType
+
+/**
+ * Provides programmatic access to the version catalog in convention plugins.
+ * Use this when you need to call findLibrary(), findPlugin(), etc.
+ *
+ * Note: Named `versionCatalog` instead of `libs` to avoid shadowing
+ * the type-safe accessors used in module build.gradle.kts files.
+ */
+internal val Project.versionCatalog: VersionCatalog
+    get() = extensions.getByType<VersionCatalogsExtension>().named("libs")
+```
+
+#### Step 4: Use Version Catalog in Convention Plugins
+
+```kotlin
+// build-logic/convention/src/main/kotlin/AndroidLibraryConventionPlugin.kt
+import com.android.build.gradle.LibraryExtension
+import org.gradle.api.Plugin
+import org.gradle.api.Project
+import org.gradle.kotlin.dsl.configure
+
+class AndroidLibraryConventionPlugin : Plugin<Project> {
+    override fun apply(target: Project) {
+        with(target) {
+            with(pluginManager) {
+                // Use version catalog to get plugin IDs
+                apply(versionCatalog.findPlugin("android-library").get().get().pluginId)
+                apply(versionCatalog.findPlugin("kotlin-android").get().get().pluginId)
+            }
+
+            extensions.configure<LibraryExtension> {
+                configureKotlinAndroid(this)
+                defaultConfig.targetSdk = 36
+            }
+        }
+    }
+}
+```
+
+### Why This Pattern Matters
+
+1. **Single Source of Truth**: All plugin versions and IDs are defined in `libs.versions.toml`
+2. **Type Safety**: Gradle validates plugin aliases at build time
+3. **IDE Support**: Better autocomplete and refactoring support
+4. **Consistency**: Module build files use `alias(libs.plugins.xxx)` syntax that matches convention plugin registration
+5. **Maintainability**: Changing a plugin ID only requires updating `libs.versions.toml`
+
+### Alternative: Hardcoded Strings (Less Preferred)
+
+While simpler, hardcoded plugin strings don't provide the same maintainability benefits:
+
+```kotlin
+// LESS PREFERRED - hardcoded strings
+apply("com.android.library")
+apply("org.jetbrains.kotlin.android")
+
+// PREFERRED - version catalog aliases
+apply(versionCatalog.findPlugin("android-library").get().get().pluginId)
+apply(versionCatalog.findPlugin("kotlin-android").get().get().pluginId)
+```
+
+### KMP Library Plugin (Legacy Pattern)
+
+```kotlin
+// build-logic/build.gradle.kts (simplified, legacy pattern)
 plugins {
     `kotlin-dsl`
 }

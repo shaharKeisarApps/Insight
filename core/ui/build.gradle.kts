@@ -1,6 +1,6 @@
 plugins {
-    id("insight.android.library")
-    id("insight.android.compose")
+    alias(libs.plugins.insight.android.library)
+    alias(libs.plugins.insight.android.compose)
 }
 
 android {

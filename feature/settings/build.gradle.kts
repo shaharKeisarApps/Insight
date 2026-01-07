@@ -1,5 +1,5 @@
 plugins {
-    id("insight.android.feature")
+    alias(libs.plugins.insight.android.feature)
 }
 
 android {

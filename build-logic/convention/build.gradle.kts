@@ -34,19 +34,19 @@ tasks {
 gradlePlugin {
     plugins {
         register("androidApplication") {
-            id = "insight.android.application"
+            id = libs.plugins.insight.android.application.get().pluginId
             implementationClass = "AndroidApplicationConventionPlugin"
         }
         register("androidLibrary") {
-            id = "insight.android.library"
+            id = libs.plugins.insight.android.library.get().pluginId
             implementationClass = "AndroidLibraryConventionPlugin"
         }
         register("androidCompose") {
-            id = "insight.android.compose"
+            id = libs.plugins.insight.android.compose.get().pluginId
             implementationClass = "AndroidComposeConventionPlugin"
         }
         register("androidFeature") {
-            id = "insight.android.feature"
+            id = libs.plugins.insight.android.feature.get().pluginId
             implementationClass = "AndroidFeatureConventionPlugin"
         }
     }

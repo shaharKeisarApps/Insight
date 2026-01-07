@@ -1,20 +1,18 @@
 import com.android.build.gradle.LibraryExtension
 import org.gradle.api.Plugin
 import org.gradle.api.Project
-import org.gradle.api.artifacts.VersionCatalogsExtension
 import org.gradle.kotlin.dsl.configure
 import org.gradle.kotlin.dsl.dependencies
-import org.gradle.kotlin.dsl.getByType
 
 class AndroidFeatureConventionPlugin : Plugin<Project> {
     override fun apply(target: Project) {
         with(target) {
             with(pluginManager) {
-                apply("insight.android.library")
-                apply("insight.android.compose")
-                apply("org.jetbrains.kotlin.plugin.parcelize")
-                apply("dev.zacsweers.metro")
-                apply("com.google.devtools.ksp")
+                apply(versionCatalog.findPlugin("insight-android-library").get().get().pluginId)
+                apply(versionCatalog.findPlugin("insight-android-compose").get().get().pluginId)
+                apply(versionCatalog.findPlugin("kotlin-parcelize").get().get().pluginId)
+                apply(versionCatalog.findPlugin("metro").get().get().pluginId)
+                apply(versionCatalog.findPlugin("ksp").get().get().pluginId)
             }
 
             extensions.configure<LibraryExtension> {
@@ -32,8 +30,6 @@ class AndroidFeatureConventionPlugin : Plugin<Project> {
                 }
             }
 
-            val libs = extensions.getByType<VersionCatalogsExtension>().named("libs")
-
             dependencies {
                 add("implementation", project(":core:model"))
                 add("implementation", project(":core:data"))
@@ -41,10 +37,10 @@ class AndroidFeatureConventionPlugin : Plugin<Project> {
                 add("implementation", project(":core:ui"))
                 add("implementation", project(":core:common"))
 
-                add("implementation", libs.findLibrary("circuit.foundation").get())
-                add("implementation", libs.findLibrary("circuit.retained").get())
-                add("implementation", libs.findLibrary("circuit.codegen.annotations").get())
-                add("ksp", libs.findLibrary("circuit.codegen").get())
+                add("implementation", versionCatalog.findLibrary("circuit-foundation").get())
+                add("implementation", versionCatalog.findLibrary("circuit-retained").get())
+                add("implementation", versionCatalog.findLibrary("circuit-codegen-annotations").get())
+                add("ksp", versionCatalog.findLibrary("circuit-codegen").get())
             }
         }
     }

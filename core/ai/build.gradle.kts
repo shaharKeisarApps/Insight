@@ -1,5 +1,5 @@
 plugins {
-    id("insight.android.library")
+    alias(libs.plugins.insight.android.library)
     alias(libs.plugins.metro)
 }
 
