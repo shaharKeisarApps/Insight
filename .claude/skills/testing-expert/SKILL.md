@@ -1,6 +1,6 @@
 ---
 name: testing-expert
-description: Elite KMP testing expertise covering unit tests, presenter testing with Turbine, screenshot tests with Roborazzi/Paparazzi, repository tests, and test architecture. Use when writing tests, designing test strategies, setting up test infrastructure, or debugging test failures. Triggers on test creation, test patterns, fake implementations, or test infrastructure questions.
+description: Elite KMP testing expertise covering unit tests, presenter testing with Turbine, screenshot tests with Compose Preview Screenshot Testing/Roborazzi/Paparazzi, repository tests, and test architecture. Use when writing tests, designing test strategies, setting up test infrastructure, or debugging test failures. Triggers on test creation, test patterns, fake implementations, or test infrastructure questions.
 ---
 
 # Testing Expert Skill
@@ -572,7 +572,260 @@ class GetUserProfileUseCaseTest {
 }
 ```
 
-## Screenshot Testing (Roborazzi - Recommended)
+## Screenshot Testing Options
+
+This project supports three screenshot testing approaches:
+
+| Tool | Type | Best For |
+|------|------|----------|
+| **Compose Preview Screenshot Testing** | Official Google tool | Simple preview-based tests, teams new to screenshot testing |
+| **Roborazzi** | JVM/Robolectric | Advanced control, parameterized tests, CI consistency |
+| **Paparazzi** | JVM layoutlib | Fast iteration, no Robolectric dependency |
+
+---
+
+## Compose Preview Screenshot Testing (Official Google Tool)
+
+Google's official screenshot testing tool that converts `@Preview` composables into automated tests. Ideal for leveraging existing previews.
+
+### Requirements
+- AGP 8.5.0+
+- Kotlin 1.9.20+ (2.0+ recommended)
+- JDK 23 or lower
+
+### Setup
+
+**1. Enable in `gradle.properties`:**
+```properties
+android.experimental.enableScreenshotTest=true
+```
+
+**2. Add to version catalog (`libs.versions.toml`):**
+```toml
+[versions]
+screenshot = "0.0.1-alpha12"
+
+[plugins]
+screenshot = { id = "com.android.compose.screenshot", version.ref = "screenshot" }
+
+[libraries]
+screenshot-validation-api = { group = "com.android.tools.screenshot", name = "screenshot-validation-api", version.ref = "screenshot" }
+```
+
+**3. Configure module `build.gradle.kts`:**
+```kotlin
+plugins {
+    alias(libs.plugins.screenshot)
+}
+
+android {
+    experimentalProperties["android.experimental.enableScreenshotTest"] = true
+
+    testOptions {
+        screenshotTests {
+            imageDifferenceThreshold = 0.0001f // 0.01% tolerance
+        }
+    }
+}
+
+dependencies {
+    screenshotTestImplementation(libs.screenshot.validation.api)
+    screenshotTestImplementation(libs.androidx.ui.tooling)
+}
+```
+
+### Writing Screenshot Tests
+
+Create test files in `src/screenshotTest/kotlin/`:
+
+```kotlin
+package com.example.app
+
+import androidx.compose.runtime.Composable
+import androidx.compose.ui.tooling.preview.Preview
+import com.android.tools.screenshot.PreviewTest
+import com.example.app.ui.theme.AppTheme
+
+// Basic screenshot test
+@PreviewTest
+@Preview(showBackground = true)
+@Composable
+fun ProfileCardPreview() {
+    AppTheme {
+        ProfileCard(
+            user = PreviewData.user,
+            onClick = {},
+        )
+    }
+}
+
+// Multiple configurations with multi-preview
+@PreviewTest
+@Preview(name = "Light", showBackground = true)
+@Preview(name = "Dark", uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
+@Composable
+fun ProfileCardThemeVariants() {
+    AppTheme {
+        ProfileCard(user = PreviewData.user, onClick = {})
+    }
+}
+
+// Font scale variants
+@PreviewTest
+@Preview(name = "Normal", fontScale = 1.0f)
+@Preview(name = "Large", fontScale = 1.5f)
+@Preview(name = "Small", fontScale = 0.85f)
+@Composable
+fun ProfileCardFontScales() {
+    AppTheme {
+        ProfileCard(user = PreviewData.user, onClick = {})
+    }
+}
+
+// Different states
+@PreviewTest
+@Preview(showBackground = true)
+@Composable
+fun ProfileScreenLoadingPreview() {
+    AppTheme {
+        ProfileUi(state = ProfileScreen.State.Loading)
+    }
+}
+
+@PreviewTest
+@Preview(showBackground = true)
+@Composable
+fun ProfileScreenSuccessPreview() {
+    AppTheme {
+        ProfileUi(
+            state = ProfileScreen.State.Success(
+                user = PreviewData.user,
+                isRefreshing = false,
+                eventSink = {},
+            ),
+        )
+    }
+}
+
+@PreviewTest
+@Preview(showBackground = true)
+@Composable
+fun ProfileScreenErrorPreview() {
+    AppTheme {
+        ProfileUi(
+            state = ProfileScreen.State.Error(
+                message = "Unable to load profile",
+                canRetry = true,
+                eventSink = {},
+            ),
+        )
+    }
+}
+```
+
+### Using Built-in Multi-Preview Annotations
+
+Leverage standard multi-preview annotations for comprehensive coverage:
+
+```kotlin
+import androidx.compose.ui.tooling.preview.PreviewScreenSizes
+import androidx.compose.ui.tooling.preview.PreviewFontScale
+import androidx.compose.ui.tooling.preview.PreviewLightDark
+import androidx.compose.ui.tooling.preview.PreviewDynamicColors
+
+// Custom combined annotation
+@PreviewTest
+@PreviewLightDark
+@PreviewFontScale
+annotation class StandardScreenshotTests
+
+@StandardScreenshotTests
+@Composable
+fun ButtonPreview() {
+    AppTheme {
+        PrimaryButton(text = "Submit", onClick = {})
+    }
+}
+```
+
+### Gradle Commands
+
+```bash
+# Generate/update reference screenshots
+./gradlew updateDebugScreenshotTest
+./gradlew :feature:profile:updateDebugScreenshotTest
+
+# Validate against references (fails on differences)
+./gradlew validateDebugScreenshotTest
+./gradlew :feature:profile:validateDebugScreenshotTest
+```
+
+**Output locations:**
+- References: `{module}/src/screenshotTest{Variant}/reference/`
+- Reports: `{module}/build/reports/screenshotTest/preview/{variant}/index.html`
+
+### CI Best Practices
+
+```yaml
+# GitHub Actions example
+jobs:
+  screenshot-tests:
+    runs-on: ubuntu-latest  # Use consistent OS
+    steps:
+      - uses: actions/checkout@v4
+      - name: Set up JDK 21
+        uses: actions/setup-java@v4
+        with:
+          java-version: '21'
+          distribution: 'temurin'
+
+      - name: Validate screenshots
+        run: ./gradlew validateDebugScreenshotTest
+
+      - name: Upload report on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: screenshot-report
+          path: '**/build/reports/screenshotTest/'
+```
+
+**Important CI considerations:**
+- ⚠️ Different OS platforms may produce slightly different screenshots
+- Run `updateDebugScreenshotTest` **manually only** when UI intentionally changes
+- Run `validateDebugScreenshotTest` on every PR
+- Use consistent JDK and OS version in CI
+- Flag screenshot changes in PRs for reviewer attention
+
+### Directory Structure
+
+```
+module/
+├── src/
+│   ├── main/kotlin/           # Production code
+│   ├── test/kotlin/           # Unit tests
+│   └── screenshotTest/        # Screenshot tests
+│       └── kotlin/
+│           └── com/app/feature/
+│               ├── ProfileScreenshotTest.kt
+│               └── ComponentScreenshotTests.kt
+│       └── reference/         # Generated reference images (commit these)
+│           └── debug/
+│               └── com.app.feature.ProfileCardPreview_xxx.png
+```
+
+### Troubleshooting
+
+| Issue | Solution |
+|-------|----------|
+| Tests not found | Ensure `@PreviewTest` annotation is present (required since v0.0.1-alpha10) |
+| Different results on CI | Lock OS, JDK version; consider using Docker |
+| Memory issues | Configure heap size in plugin v0.0.1-alpha12+ |
+| Missing dependencies | Add both `screenshot-validation-api` and `ui-tooling` |
+
+---
+
+## Screenshot Testing (Roborazzi - Recommended for Advanced Use)
 
 Roborazzi is preferred for JVM-based screenshot tests as it integrates with Robolectric:
 
@@ -1116,6 +1369,7 @@ fun deterministic_test() = runTest {
 
 ## References
 
+- Compose Preview Screenshot Testing: https://developer.android.com/studio/preview/compose-screenshot-testing
 - Turbine: https://github.com/cashapp/turbine
 - Roborazzi: https://github.com/takahirom/roborazzi
 - Paparazzi: https://github.com/cashapp/paparazzi
