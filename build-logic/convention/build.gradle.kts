@@ -6,6 +6,9 @@ plugins {
 
 group = "com.keisardev.insight.buildlogic"
 
+// Note: These values should match ProjectConfig.kt
+// We can't reference ProjectConfig here since this file is evaluated
+// before the Kotlin sources are compiled.
 java {
     sourceCompatibility = JavaVersion.VERSION_21
     targetCompatibility = JavaVersion.VERSION_21

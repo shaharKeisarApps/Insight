@@ -330,6 +330,76 @@ class AndroidLibraryConventionPlugin : Plugin<Project> {
 4. **Consistency**: Module build files use `alias(libs.plugins.xxx)` syntax that matches convention plugin registration
 5. **Maintainability**: Changing a plugin ID only requires updating `libs.versions.toml`
 
+### Step 5: Centralized Build Configuration (ProjectConfig)
+
+Create a centralized configuration object for build settings like Java version and SDK versions:
+
+```kotlin
+// build-logic/convention/src/main/kotlin/ProjectConfig.kt
+import org.gradle.api.JavaVersion
+import org.jetbrains.kotlin.gradle.dsl.JvmTarget
+
+/**
+ * Centralized project configuration for build settings.
+ * Change values here to update across all modules.
+ */
+object ProjectConfig {
+    /**
+     * Java version used for source and target compatibility.
+     * This affects both Java compilation and Kotlin JVM target.
+     */
+    const val JAVA_VERSION_INT = 21
+    val JAVA_VERSION: JavaVersion = JavaVersion.VERSION_21
+    val JVM_TARGET: JvmTarget = JvmTarget.JVM_21
+
+    /**
+     * Android SDK versions.
+     */
+    const val COMPILE_SDK = 36
+    const val TARGET_SDK = 36
+    const val MIN_SDK = 33
+}
+```
+
+Then use it in convention plugins:
+
+```kotlin
+// build-logic/convention/src/main/kotlin/KotlinAndroid.kt
+internal fun Project.configureKotlinAndroid(
+    commonExtension: CommonExtension<*, *, *, *, *, *>,
+) {
+    commonExtension.apply {
+        compileSdk = ProjectConfig.COMPILE_SDK
+
+        defaultConfig {
+            minSdk = ProjectConfig.MIN_SDK
+        }
+
+        compileOptions {
+            sourceCompatibility = ProjectConfig.JAVA_VERSION
+            targetCompatibility = ProjectConfig.JAVA_VERSION
+        }
+    }
+
+    extensions.configure<KotlinAndroidProjectExtension> {
+        compilerOptions {
+            jvmTarget.set(ProjectConfig.JVM_TARGET)
+        }
+    }
+}
+```
+
+**Note**: The build-logic/convention/build.gradle.kts cannot reference ProjectConfig since it's evaluated before Kotlin sources are compiled. Add a comment noting values should match:
+
+```kotlin
+// build-logic/convention/build.gradle.kts
+// Note: These values should match ProjectConfig.kt
+java {
+    sourceCompatibility = JavaVersion.VERSION_21
+    targetCompatibility = JavaVersion.VERSION_21
+}
+```
+
 ### Alternative: Hardcoded Strings (Less Preferred)
 
 While simpler, hardcoded plugin strings don't provide the same maintainability benefits:
