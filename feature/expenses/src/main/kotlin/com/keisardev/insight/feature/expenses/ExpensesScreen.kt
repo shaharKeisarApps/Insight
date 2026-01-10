@@ -8,6 +8,8 @@ import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
 import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -19,6 +21,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Receipt
@@ -31,7 +34,9 @@ import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -110,13 +115,32 @@ class ExpensesPresenter @AssistedInject constructor(
 @CircuitInject(ExpensesScreen::class, AppScope::class)
 @Composable
 fun ExpensesUi(state: ExpensesScreen.State, modifier: Modifier = Modifier) {
+    val listState = rememberLazyListState()
+
+    // FAB visibility: show when at top or scrolling up, hide when scrolling down
+    val isFabVisible by remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex == 0 ||
+            listState.layoutInfo.visibleItemsInfo.firstOrNull()?.let { first ->
+                val previousIndex = listState.layoutInfo.visibleItemsInfo.getOrNull(1)?.index ?: 0
+                first.index <= previousIndex
+            } ?: true
+        }
+    }
+
     Scaffold(
         modifier = modifier,
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { state.eventSink(ExpensesScreen.Event.OnAddClick) },
+            AnimatedVisibility(
+                visible = isFabVisible || state.expenses.isEmpty(),
+                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Add expense")
+                FloatingActionButton(
+                    onClick = { state.eventSink(ExpensesScreen.Event.OnAddClick) },
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Add expense")
+                }
             }
         },
     ) { paddingValues ->
@@ -143,6 +167,7 @@ fun ExpensesUi(state: ExpensesScreen.State, modifier: Modifier = Modifier) {
                 ExpensesList(
                     expenses = state.expenses,
                     onExpenseClick = { state.eventSink(ExpensesScreen.Event.OnExpenseClick(it)) },
+                    listState = listState,
                     modifier = Modifier.padding(paddingValues),
                 )
             }
@@ -154,9 +179,11 @@ fun ExpensesUi(state: ExpensesScreen.State, modifier: Modifier = Modifier) {
 private fun ExpensesList(
     expenses: List<Expense>,
     onExpenseClick: (Long) -> Unit,
+    listState: androidx.compose.foundation.lazy.LazyListState,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
+        state = listState,
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
