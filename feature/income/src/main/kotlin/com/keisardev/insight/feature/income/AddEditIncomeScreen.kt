@@ -1,5 +1,10 @@
 package com.keisardev.insight.feature.income
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
@@ -25,6 +30,7 @@ import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Button
+import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.DatePicker
 import androidx.compose.material3.DatePickerDialog
 import androidx.compose.material3.ExperimentalMaterial3Api
@@ -248,7 +254,23 @@ fun AddEditIncomeUi(state: AddEditIncomeScreen.State, modifier: Modifier = Modif
                         onClick = { state.eventSink(AddEditIncomeScreen.Event.OnSave) },
                         enabled = !state.isSaving && state.amount.toDoubleOrNull() != null && state.selectedCategory != null,
                     ) {
-                        Icon(Icons.Default.Check, contentDescription = "Save")
+                        AnimatedContent(
+                            targetState = state.isSaving,
+                            transitionSpec = {
+                                fadeIn(animationSpec = tween(200)) togetherWith
+                                fadeOut(animationSpec = tween(200))
+                            },
+                            label = "save_button"
+                        ) { isSaving ->
+                            if (isSaving) {
+                                CircularProgressIndicator(
+                                    modifier = Modifier.size(24.dp),
+                                    strokeWidth = 2.dp,
+                                )
+                            } else {
+                                Icon(Icons.Default.Check, contentDescription = "Save")
+                            }
+                        }
                     }
                 },
             )
