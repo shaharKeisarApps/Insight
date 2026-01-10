@@ -1,5 +1,13 @@
 package com.keisardev.insight.feature.expenses
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -154,10 +162,18 @@ private fun ExpensesList(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items(expenses, key = { it.id }) { expense ->
-            ExpenseItem(
-                expense = expense,
-                onClick = { onExpenseClick(expense.id) },
-            )
+            AnimatedVisibility(
+                visible = true,
+                enter = fadeIn(animationSpec = tween(300)) + expandVertically(
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+                ),
+                exit = fadeOut(animationSpec = tween(150)) + shrinkVertically()
+            ) {
+                ExpenseItem(
+                    expense = expense,
+                    onClick = { onExpenseClick(expense.id) },
+                )
+            }
         }
     }
 }

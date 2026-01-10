@@ -1,5 +1,23 @@
 package com.keisardev.insight.feature.aichat
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.EaseInOutCubic
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.StartOffset
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.draw.scale
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -233,7 +251,21 @@ private fun ChatMessagesList(
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items(messages, key = { it.id }) { message ->
-            ChatMessageItem(message = message)
+            AnimatedVisibility(
+                visible = true,
+                enter = fadeIn(animationSpec = tween(300)) + slideInVertically(
+                    initialOffsetY = { fullHeight ->
+                        if (message.isUser) fullHeight / 3 else -fullHeight / 3
+                    },
+                    animationSpec = spring(
+                        dampingRatio = Spring.DampingRatioMediumBouncy,
+                        stiffness = Spring.StiffnessLow
+                    )
+                ),
+                exit = fadeOut(animationSpec = tween(150)) + shrinkVertically()
+            ) {
+                ChatMessageItem(message = message)
+            }
         }
 
         if (isLoading) {
@@ -328,17 +360,34 @@ private fun LoadingIndicator(modifier: Modifier = Modifier) {
             Row(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(16.dp),
-                    strokeWidth = 2.dp,
-                )
-                Text(
-                    text = "Thinking...",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                // Animated bouncing dots
+                repeat(3) { index ->
+                    val infiniteTransition = rememberInfiniteTransition(
+                        label = "typing_dot_$index"
+                    )
+                    val offsetY by infiniteTransition.animateFloat(
+                        initialValue = 0f,
+                        targetValue = -8f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(
+                                durationMillis = 600,
+                                easing = EaseInOutCubic
+                            ),
+                            repeatMode = RepeatMode.Reverse,
+                            initialStartOffset = StartOffset(index * 150)
+                        ),
+                        label = "dot_offset_$index"
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .offset(y = offsetY.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.onSurfaceVariant)
+                    )
+                }
             }
         }
     }
@@ -352,6 +401,22 @@ private fun ChatInput(
     onSend: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val isEnabled = inputText.isNotBlank() && !isLoading
+    val scale by animateFloatAsState(
+        targetValue = if (isEnabled) 1f else 0.9f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "send_button_scale"
+    )
+    val iconColor by animateColorAsState(
+        targetValue = if (isEnabled) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+        },
+        animationSpec = tween(300),
+        label = "send_button_color"
+    )
+
     Surface(
         modifier = modifier,
         shadowElevation = 8.dp,
@@ -373,16 +438,13 @@ private fun ChatInput(
             Spacer(modifier = Modifier.width(8.dp))
             IconButton(
                 onClick = onSend,
-                enabled = inputText.isNotBlank() && !isLoading,
+                enabled = isEnabled,
+                modifier = Modifier.scale(scale)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Send,
                     contentDescription = "Send",
-                    tint = if (inputText.isNotBlank() && !isLoading) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
+                    tint = iconColor,
                 )
             }
         }
