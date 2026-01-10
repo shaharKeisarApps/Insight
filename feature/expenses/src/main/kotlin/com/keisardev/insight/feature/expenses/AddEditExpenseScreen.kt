@@ -1,6 +1,10 @@
 package com.keisardev.insight.feature.expenses
 
 import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.Spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
@@ -54,6 +58,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.scale
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -398,6 +403,14 @@ private fun CategoryChip(
     modifier: Modifier = Modifier,
 ) {
     val categoryColor = category.color
+
+    // Animate selection state with subtle scale and color transition
+    val scale by animateFloatAsState(
+        targetValue = if (isSelected) 1.05f else 1f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "chip_scale"
+    )
+
     FilterChip(
         selected = isSelected,
         onClick = onClick,
@@ -421,7 +434,7 @@ private fun CategoryChip(
         colors = FilterChipDefaults.filterChipColors(
             selectedContainerColor = categoryColor.copy(alpha = 0.15f),
         ),
-        modifier = modifier,
+        modifier = modifier.scale(scale),
     )
 }
 
