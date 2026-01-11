@@ -7,6 +7,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -50,7 +51,6 @@ import com.keisardev.insight.core.model.Category
 import com.keisardev.insight.core.model.Expense
 import com.keisardev.insight.core.ui.component.CategoryIconCircle
 import com.keisardev.insight.core.ui.component.EmptyState
-import com.keisardev.insight.core.ui.component.color
 import com.keisardev.insight.core.ui.util.formatCurrency
 import com.keisardev.insight.core.ui.util.formatDateShort
 import com.slack.circuit.codegen.annotations.CircuitInject
@@ -156,12 +156,20 @@ fun ExpensesUi(state: ExpensesScreen.State, modifier: Modifier = Modifier) {
                 }
             }
             state.expenses.isEmpty() -> {
-                EmptyState(
-                    icon = Icons.Outlined.Receipt,
-                    title = "No expenses yet",
-                    subtitle = "Tap + to add your first expense",
-                    modifier = Modifier.padding(paddingValues),
-                )
+                AnimatedVisibility(
+                    visible = true,
+                    enter = fadeIn(animationSpec = tween(400)) + scaleIn(
+                        initialScale = 0.9f,
+                        animationSpec = tween(400)
+                    ),
+                ) {
+                    EmptyState(
+                        icon = Icons.Outlined.Receipt,
+                        title = "No expenses yet",
+                        subtitle = "Tap + to add your first expense",
+                        modifier = Modifier.padding(paddingValues),
+                    )
+                }
             }
             else -> {
                 ExpensesList(

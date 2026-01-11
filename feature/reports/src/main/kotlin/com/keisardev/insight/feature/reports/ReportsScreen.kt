@@ -8,6 +8,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
@@ -300,10 +301,18 @@ private fun SpendingView(
         Spacer(modifier = Modifier.height(24.dp))
 
         if (categoryBreakdown.isEmpty()) {
-            EmptyState(
-                icon = Icons.Outlined.BarChart,
-                title = "No expenses this month",
-            )
+            AnimatedVisibility(
+                visible = true,
+                enter = fadeIn(animationSpec = tween(400)) + scaleIn(
+                    initialScale = 0.9f,
+                    animationSpec = tween(400)
+                ),
+            ) {
+                EmptyState(
+                    icon = Icons.Outlined.BarChart,
+                    title = "No expenses this month",
+                )
+            }
         } else {
             Text(
                 text = "By Category",
@@ -354,10 +363,18 @@ private fun EarningsView(
         Spacer(modifier = Modifier.height(24.dp))
 
         if (incomeCategoryBreakdown.isEmpty()) {
-            EmptyState(
-                icon = Icons.Outlined.BarChart,
-                title = "No earnings this month",
-            )
+            AnimatedVisibility(
+                visible = true,
+                enter = fadeIn(animationSpec = tween(400)) + scaleIn(
+                    initialScale = 0.9f,
+                    animationSpec = tween(400)
+                ),
+            ) {
+                EmptyState(
+                    icon = Icons.Outlined.BarChart,
+                    title = "No earnings this month",
+                )
+            }
         } else {
             Text(
                 text = "By Category",

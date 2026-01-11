@@ -7,6 +7,7 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
@@ -154,12 +155,20 @@ fun IncomeUi(state: IncomeScreen.State, modifier: Modifier = Modifier) {
                 }
             }
             state.incomes.isEmpty() -> {
-                EmptyState(
-                    icon = Icons.Outlined.AccountBalanceWallet,
-                    title = "No earnings recorded yet",
-                    subtitle = "Tap + to add your first income",
-                    modifier = Modifier.padding(paddingValues),
-                )
+                AnimatedVisibility(
+                    visible = true,
+                    enter = fadeIn(animationSpec = tween(400)) + scaleIn(
+                        initialScale = 0.9f,
+                        animationSpec = tween(400)
+                    ),
+                ) {
+                    EmptyState(
+                        icon = Icons.Outlined.AccountBalanceWallet,
+                        title = "No earnings recorded yet",
+                        subtitle = "Tap + to add your first income",
+                        modifier = Modifier.padding(paddingValues),
+                    )
+                }
             }
             else -> {
                 IncomeList(
