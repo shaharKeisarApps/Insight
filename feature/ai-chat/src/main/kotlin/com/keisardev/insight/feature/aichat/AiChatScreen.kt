@@ -167,23 +167,26 @@ fun AiChatUi(state: AiChatScreen.State, modifier: Modifier = Modifier) {
         if (!state.isAiEnabled) {
             AiDisabledContent(modifier = Modifier.padding(paddingValues))
         } else {
-            Column(
+            Box(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues),
+                    .padding(paddingValues)
             ) {
+                // Messages list - stays in place when keyboard opens
                 ChatMessagesList(
                     messages = state.messages,
                     isLoading = state.isLoading,
-                    modifier = Modifier.weight(1f),
+                    modifier = Modifier.fillMaxSize(),
                 )
 
+                // Input box - floats on top and moves with keyboard
                 ChatInput(
                     inputText = state.inputText,
                     isLoading = state.isLoading,
                     onInputChange = { state.eventSink(AiChatScreen.Event.OnInputChange(it)) },
                     onSend = { state.eventSink(AiChatScreen.Event.OnSend) },
                     modifier = Modifier
+                        .align(Alignment.BottomCenter)
                         .fillMaxWidth()
                         .imePadding(),
                 )
@@ -249,8 +252,13 @@ private fun ChatMessagesList(
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
         state = listState,
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(
+            start = 12.dp,
+            end = 12.dp,
+            top = 16.dp,
+            bottom = 96.dp // Space for floating input box
+        ),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         items(messages, key = { it.id }) { message ->
             AnimatedVisibility(
@@ -326,26 +334,31 @@ private fun ChatMessageItem(
 
         Surface(
             shape = RoundedCornerShape(
-                topStart = 16.dp,
-                topEnd = 16.dp,
-                bottomStart = if (message.isUser) 16.dp else 4.dp,
-                bottomEnd = if (message.isUser) 4.dp else 16.dp,
+                topStart = 20.dp,
+                topEnd = 20.dp,
+                bottomStart = if (message.isUser) 20.dp else 4.dp,
+                bottomEnd = if (message.isUser) 4.dp else 20.dp,
             ),
             color = if (message.isUser) {
                 MaterialTheme.colorScheme.primary
             } else {
-                MaterialTheme.colorScheme.surfaceVariant
+                MaterialTheme.colorScheme.surfaceContainer
             },
-            modifier = Modifier.widthIn(max = 300.dp),
+            tonalElevation = if (message.isUser) 0.dp else 1.dp,
+            shadowElevation = if (message.isUser) 2.dp else 0.dp,
+            modifier = Modifier.widthIn(max = 280.dp),
         ) {
             Text(
                 text = message.content,
-                modifier = Modifier.padding(12.dp),
-                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier.padding(
+                    horizontal = 16.dp,
+                    vertical = 12.dp
+                ),
+                style = MaterialTheme.typography.bodyLarge,
                 color = if (message.isUser) {
                     MaterialTheme.colorScheme.onPrimary
                 } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
+                    MaterialTheme.colorScheme.onSurface
                 },
             )
         }
@@ -440,32 +453,48 @@ private fun ChatInput(
 
     Surface(
         modifier = modifier,
-        shadowElevation = 8.dp,
+        color = MaterialTheme.colorScheme.surface,
+        shadowElevation = 12.dp,
+        tonalElevation = 3.dp,
     ) {
         Row(
             modifier = Modifier
-                .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+                .padding(horizontal = 12.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.Bottom,
         ) {
             OutlinedTextField(
                 value = inputText,
                 onValueChange = onInputChange,
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("Ask about your expenses...") },
-                maxLines = 3,
+                placeholder = {
+                    Text(
+                        "Ask about your expenses...",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                },
+                textStyle = MaterialTheme.typography.bodyLarge,
+                maxLines = 4,
                 enabled = !isLoading,
                 shape = RoundedCornerShape(24.dp),
+                colors = androidx.compose.material3.TextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                ),
             )
             Spacer(modifier = Modifier.width(8.dp))
             IconButton(
                 onClick = onSend,
                 enabled = isEnabled,
-                modifier = Modifier.scale(scale)
+                modifier = Modifier
+                    .scale(scale)
+                    .size(48.dp)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Send,
                     contentDescription = "Send",
                     tint = iconColor,
+                    modifier = Modifier.size(24.dp)
                 )
             }
         }
