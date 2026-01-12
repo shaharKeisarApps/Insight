@@ -165,32 +165,36 @@ class AiChatPresenter @AssistedInject constructor(
 @CircuitInject(AiChatScreen::class, AppScope::class)
 @Composable
 fun AiChatUi(state: AiChatScreen.State, modifier: Modifier = Modifier) {
-    Scaffold(modifier = modifier) { paddingValues ->
-        if (!state.isAiEnabled) {
-            AiDisabledContent(modifier = Modifier.padding(paddingValues))
-        } else {
-            Column(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(paddingValues)
-                    .imePadding()
-            ) {
-                // Messages list - takes remaining space
-                ChatMessagesList(
-                    messages = state.messages,
-                    isLoading = state.isLoading,
-                    modifier = Modifier.weight(1f),
-                )
-
-                // Input box - sized to content
+    Scaffold(
+        modifier = modifier,
+        bottomBar = {
+            // Only show input when AI is enabled
+            if (state.isAiEnabled) {
+                // BottomBar automatically handles IME without pushing content
                 ChatInput(
                     inputText = state.inputText,
                     isLoading = state.isLoading,
                     onInputChange = { state.eventSink(AiChatScreen.Event.OnInputChange(it)) },
                     onSend = { state.eventSink(AiChatScreen.Event.OnSend) },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .imePadding(),
                 )
             }
+        }
+    ) { paddingValues ->
+        if (!state.isAiEnabled) {
+            AiDisabledContent(modifier = Modifier.padding(paddingValues))
+        } else {
+            // Messages list fills available space
+            // Scaffold automatically provides padding for bottomBar
+            ChatMessagesList(
+                messages = state.messages,
+                isLoading = state.isLoading,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .padding(paddingValues),
+            )
         }
     }
 }
