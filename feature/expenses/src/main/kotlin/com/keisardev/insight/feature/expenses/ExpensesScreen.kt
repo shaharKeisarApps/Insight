@@ -28,7 +28,7 @@ import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.Receipt
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import com.keisardev.insight.core.ui.component.SkeletonTransactionItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -146,13 +146,16 @@ fun ExpensesUi(state: ExpensesScreen.State, modifier: Modifier = Modifier) {
     ) { paddingValues ->
         when {
             state.isLoading -> {
-                Box(
+                LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues),
-                    contentAlignment = Alignment.Center,
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    CircularProgressIndicator()
+                    items(5) {
+                        SkeletonTransactionItem()
+                    }
                 }
             }
             state.expenses.isEmpty() -> {

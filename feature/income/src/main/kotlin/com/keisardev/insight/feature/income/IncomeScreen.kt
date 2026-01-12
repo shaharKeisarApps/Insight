@@ -30,7 +30,7 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import com.keisardev.insight.core.ui.component.SkeletonTransactionItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -145,13 +145,16 @@ fun IncomeUi(state: IncomeScreen.State, modifier: Modifier = Modifier) {
     ) { paddingValues ->
         when {
             state.isLoading -> {
-                Box(
+                LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues),
-                    contentAlignment = Alignment.Center,
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    CircularProgressIndicator()
+                    items(5) {
+                        SkeletonTransactionItem()
+                    }
                 }
             }
             state.incomes.isEmpty() -> {
