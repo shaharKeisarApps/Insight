@@ -169,8 +169,8 @@ fun AiChatUi(state: AiChatScreen.State, modifier: Modifier = Modifier) {
         bottomBar = {
             // Only show input when AI is enabled
             if (state.isAiEnabled) {
-                // Edge-to-edge: Apply imePadding() to bottomBar only
-                // This pushes the input up with keyboard while preserving edge-to-edge for content
+                // Apply imePadding to ChatInput to push it up with keyboard
+                // Reduced internal padding and elevation for tighter spacing
                 ChatInput(
                     inputText = state.inputText,
                     isLoading = state.isLoading,
@@ -483,12 +483,12 @@ private fun ChatInput(
     Surface(
         modifier = modifier,
         color = MaterialTheme.colorScheme.surface,
-        shadowElevation = 12.dp,
-        tonalElevation = 3.dp,
+        shadowElevation = 8.dp,
+        tonalElevation = 2.dp,
     ) {
         Row(
             modifier = Modifier
-                .padding(horizontal = 12.dp, vertical = 12.dp),
+                .padding(horizontal = 16.dp, vertical = 8.dp),
             verticalAlignment = Alignment.Bottom,
         ) {
             OutlinedTextField(
