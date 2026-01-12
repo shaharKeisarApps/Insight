@@ -26,10 +26,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -167,19 +166,19 @@ class AiChatPresenter @AssistedInject constructor(
 fun AiChatUi(state: AiChatScreen.State, modifier: Modifier = Modifier) {
     Scaffold(
         modifier = modifier.fillMaxSize(),
-        // Edge-to-edge mode requires explicit IME inset handling
-        // contentWindowInsets tells Scaffold to account for keyboard (IME) insets
-        contentWindowInsets = WindowInsets.ime,
         bottomBar = {
             // Only show input when AI is enabled
             if (state.isAiEnabled) {
-                // Scaffold automatically pushes bottomBar up with keyboard via WindowInsets.ime
+                // Edge-to-edge: Apply imePadding() to bottomBar only
+                // This pushes the input up with keyboard while preserving edge-to-edge for content
                 ChatInput(
                     inputText = state.inputText,
                     isLoading = state.isLoading,
                     onInputChange = { state.eventSink(AiChatScreen.Event.OnInputChange(it)) },
                     onSend = { state.eventSink(AiChatScreen.Event.OnSend) },
-                    modifier = Modifier.fillMaxWidth()
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .imePadding()
                 )
             }
         }
