@@ -169,8 +169,7 @@ fun AiChatUi(state: AiChatScreen.State, modifier: Modifier = Modifier) {
             Column(
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues)
-                    .imePadding(),
+                    .padding(paddingValues),
             ) {
                 ChatMessagesList(
                     messages = state.messages,
@@ -183,7 +182,9 @@ fun AiChatUi(state: AiChatScreen.State, modifier: Modifier = Modifier) {
                     isLoading = state.isLoading,
                     onInputChange = { state.eventSink(AiChatScreen.Event.OnInputChange(it)) },
                     onSend = { state.eventSink(AiChatScreen.Event.OnSend) },
-                    modifier = Modifier.fillMaxWidth(),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .imePadding(),
                 )
             }
         }

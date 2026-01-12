@@ -568,6 +568,15 @@ private fun TotalCard(
     contentColor: androidx.compose.ui.graphics.Color,
     modifier: Modifier = Modifier,
 ) {
+    val animatedAmount by animateFloatAsState(
+        targetValue = amount.toFloat(),
+        animationSpec = tween(
+            durationMillis = 1000,
+            easing = EaseOutCubic
+        ),
+        label = "amount_count_up"
+    )
+
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -587,7 +596,7 @@ private fun TotalCard(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = formatCurrency(amount),
+                text = formatCurrency(animatedAmount.toDouble()),
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold,
                 color = contentColor,
