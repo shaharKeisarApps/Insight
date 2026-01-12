@@ -26,12 +26,9 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
-import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
-import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -46,7 +43,6 @@ import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -169,11 +165,11 @@ class AiChatPresenter @AssistedInject constructor(
 fun AiChatUi(state: AiChatScreen.State, modifier: Modifier = Modifier) {
     Scaffold(
         modifier = modifier.fillMaxSize(),
+        // adjustResize in manifest handles everything - no manual IME padding needed
         bottomBar = {
             // Only show input when AI is enabled
             if (state.isAiEnabled) {
-                // With adjustResize in manifest, system handles keyboard automatically
-                // No imePadding needed - prevents extra space between input and keyboard
+                // System automatically pushes this up with keyboard (adjustResize)
                 ChatInput(
                     inputText = state.inputText,
                     isLoading = state.isLoading,
@@ -381,7 +377,7 @@ private fun ChatMessageItem(
 }
 
 private fun formatMessageTime(timestamp: kotlinx.datetime.Instant): String {
-    val now = kotlinx.datetime.Clock.System.now()
+    val now = Clock.System.now()
     val duration = now - timestamp
 
     return when {
@@ -389,7 +385,7 @@ private fun formatMessageTime(timestamp: kotlinx.datetime.Instant): String {
         duration.inWholeMinutes < 60 -> "${duration.inWholeMinutes}m ago"
         duration.inWholeHours < 24 -> "${duration.inWholeHours}h ago"
         else -> {
-            val date = timestamp.toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault())
+            val date = timestamp.toLocalDateTime(TimeZone.currentSystemDefault())
             "${date.hour.toString().padStart(2, '0')}:${date.minute.toString().padStart(2, '0')}"
         }
     }
