@@ -167,28 +167,26 @@ fun AiChatUi(state: AiChatScreen.State, modifier: Modifier = Modifier) {
         if (!state.isAiEnabled) {
             AiDisabledContent(modifier = Modifier.padding(paddingValues))
         } else {
-            Box(
+            Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(paddingValues)
+                    .imePadding()
             ) {
-                // Messages list - stays in place when keyboard opens
+                // Messages list - takes remaining space
                 ChatMessagesList(
                     messages = state.messages,
                     isLoading = state.isLoading,
-                    modifier = Modifier.fillMaxSize(),
+                    modifier = Modifier.weight(1f),
                 )
 
-                // Input box - floats on top and moves with keyboard
+                // Input box - sized to content
                 ChatInput(
                     inputText = state.inputText,
                     isLoading = state.isLoading,
                     onInputChange = { state.eventSink(AiChatScreen.Event.OnInputChange(it)) },
                     onSend = { state.eventSink(AiChatScreen.Event.OnSend) },
-                    modifier = Modifier
-                        .align(Alignment.BottomCenter)
-                        .fillMaxWidth()
-                        .imePadding(),
+                    modifier = Modifier.fillMaxWidth(),
                 )
             }
         }
@@ -252,12 +250,7 @@ private fun ChatMessagesList(
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
         state = listState,
-        contentPadding = PaddingValues(
-            start = 12.dp,
-            end = 12.dp,
-            top = 16.dp,
-            bottom = 96.dp // Space for floating input box
-        ),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         items(messages, key = { it.id }) { message ->

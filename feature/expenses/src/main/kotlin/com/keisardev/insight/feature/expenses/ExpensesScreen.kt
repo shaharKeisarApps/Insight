@@ -34,10 +34,14 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
+import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -55,6 +59,7 @@ import com.keisardev.insight.core.ui.util.formatCurrency
 import com.keisardev.insight.core.ui.util.formatDateShort
 import com.slack.circuit.codegen.annotations.CircuitInject
 import com.slack.circuit.retained.collectAsRetainedState
+import com.slack.circuit.retained.rememberRetained
 import com.slack.circuit.runtime.CircuitUiEvent
 import com.slack.circuit.runtime.CircuitUiState
 import com.slack.circuit.runtime.Navigator
@@ -63,6 +68,8 @@ import com.slack.circuit.runtime.screen.Screen
 import dev.zacsweers.metro.Assisted
 import dev.zacsweers.metro.AssistedFactory
 import dev.zacsweers.metro.AssistedInject
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.parcelize.Parcelize
@@ -71,6 +78,7 @@ import kotlinx.parcelize.Parcelize
 data object ExpensesScreen : Screen {
     data class State(
         val isLoading: Boolean,
+        val isRefreshing: Boolean,
         val expenses: List<Expense>,
         val eventSink: (Event) -> Unit,
     ) : CircuitUiState
@@ -78,6 +86,7 @@ data object ExpensesScreen : Screen {
     sealed interface Event : CircuitUiEvent {
         data object OnAddClick : Event
         data class OnExpenseClick(val expenseId: Long) : Event
+        data object OnRefresh : Event
     }
 }
 
@@ -89,9 +98,12 @@ class ExpensesPresenter @AssistedInject constructor(
     @Composable
     override fun present(): ExpensesScreen.State {
         val expenses by expenseRepository.observeAllExpenses().collectAsRetainedState(initial = emptyList())
+        var isRefreshing by rememberRetained { mutableStateOf(false) }
+        val scope = rememberCoroutineScope()
 
         return ExpensesScreen.State(
             isLoading = false,
+            isRefreshing = isRefreshing,
             expenses = expenses,
         ) { event ->
             when (event) {
@@ -100,6 +112,14 @@ class ExpensesPresenter @AssistedInject constructor(
                 }
                 is ExpensesScreen.Event.OnExpenseClick -> {
                     navigator.goTo(AddEditExpenseScreen(expenseId = event.expenseId))
+                }
+                ExpensesScreen.Event.OnRefresh -> {
+                    isRefreshing = true
+                    scope.launch {
+                        // Simulate refresh - in real app, this would refetch from network
+                        kotlinx.coroutines.delay(800)
+                        isRefreshing = false
+                    }
                 }
             }
         }
@@ -175,12 +195,18 @@ fun ExpensesUi(state: ExpensesScreen.State, modifier: Modifier = Modifier) {
                 }
             }
             else -> {
-                ExpensesList(
-                    expenses = state.expenses,
-                    onExpenseClick = { state.eventSink(ExpensesScreen.Event.OnExpenseClick(it)) },
-                    listState = listState,
-                    modifier = Modifier.padding(paddingValues),
-                )
+                PullToRefreshBox(
+                    isRefreshing = state.isRefreshing,
+                    onRefresh = { state.eventSink(ExpensesScreen.Event.OnRefresh) },
+                    modifier = Modifier.padding(paddingValues)
+                ) {
+                    ExpensesList(
+                        expenses = state.expenses,
+                        onExpenseClick = { state.eventSink(ExpensesScreen.Event.OnExpenseClick(it)) },
+                        listState = listState,
+                        modifier = Modifier.fillMaxSize(),
+                    )
+                }
             }
         }
     }
@@ -281,6 +307,7 @@ private fun PreviewExpensesUiEmpty() {
         ExpensesUi(
             state = ExpensesScreen.State(
                 isLoading = false,
+                isRefreshing = false,
                 expenses = emptyList(),
                 eventSink = {},
             )
@@ -301,6 +328,7 @@ private fun PreviewExpensesUiWithData() {
         ExpensesUi(
             state = ExpensesScreen.State(
                 isLoading = false,
+                isRefreshing = false,
                 expenses = listOf(
                     Expense(
                         id = 1,
