@@ -26,10 +26,12 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.safeDrawing
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.layout.widthIn
@@ -166,19 +168,18 @@ class AiChatPresenter @AssistedInject constructor(
 @Composable
 fun AiChatUi(state: AiChatScreen.State, modifier: Modifier = Modifier) {
     Scaffold(
-        modifier = modifier,
+        modifier = modifier.fillMaxSize(),
         bottomBar = {
             // Only show input when AI is enabled
             if (state.isAiEnabled) {
-                // BottomBar automatically handles IME without pushing content
+                // With adjustResize in manifest, system handles keyboard automatically
+                // No imePadding needed - prevents extra space between input and keyboard
                 ChatInput(
                     inputText = state.inputText,
                     isLoading = state.isLoading,
                     onInputChange = { state.eventSink(AiChatScreen.Event.OnInputChange(it)) },
                     onSend = { state.eventSink(AiChatScreen.Event.OnSend) },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .imePadding(),
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
         }
