@@ -169,17 +169,24 @@ fun AiChatUi(state: AiChatScreen.State, modifier: Modifier = Modifier) {
         bottomBar = {
             // Only show input when AI is enabled
             if (state.isAiEnabled) {
-                // Apply imePadding to ChatInput to push it up with keyboard
-                // Reduced internal padding and elevation for tighter spacing
-                ChatInput(
-                    inputText = state.inputText,
-                    isLoading = state.isLoading,
-                    onInputChange = { state.eventSink(AiChatScreen.Event.OnInputChange(it)) },
-                    onSend = { state.eventSink(AiChatScreen.Event.OnSend) },
+                // Wrap ChatInput in Surface container with imePadding
+                // This prevents padding accumulation by applying IME offset before ChatInput internal padding
+                Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .imePadding()
-                )
+                        .imePadding(),
+                    color = MaterialTheme.colorScheme.surface,
+                    shadowElevation = 0.dp,
+                    tonalElevation = 0.dp,
+                ) {
+                    ChatInput(
+                        inputText = state.inputText,
+                        isLoading = state.isLoading,
+                        onInputChange = { state.eventSink(AiChatScreen.Event.OnInputChange(it)) },
+                        onSend = { state.eventSink(AiChatScreen.Event.OnSend) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
         }
     ) { paddingValues ->
