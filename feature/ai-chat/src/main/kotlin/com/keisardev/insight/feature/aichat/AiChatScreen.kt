@@ -14,6 +14,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
 import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.foundation.layout.offset
@@ -254,15 +255,34 @@ private fun ChatMessagesList(
         items(messages, key = { it.id }) { message ->
             AnimatedVisibility(
                 visible = true,
-                enter = fadeIn(animationSpec = tween(300)) + slideInVertically(
-                    initialOffsetY = { fullHeight ->
-                        if (message.isUser) fullHeight / 3 else -fullHeight / 3
-                    },
-                    animationSpec = spring(
-                        dampingRatio = Spring.DampingRatioMediumBouncy,
-                        stiffness = Spring.StiffnessLow
+                enter = if (message.isUser) {
+                    // User messages: animate from input field position (bottom) with scale
+                    fadeIn(animationSpec = tween(200)) +
+                    slideInVertically(
+                        initialOffsetY = { fullHeight -> fullHeight },
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMedium
+                        )
+                    ) +
+                    scaleIn(
+                        initialScale = 0.8f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMedium
+                        )
                     )
-                ),
+                } else {
+                    // AI messages: gentle slide from top
+                    fadeIn(animationSpec = tween(300)) +
+                    slideInVertically(
+                        initialOffsetY = { fullHeight -> -fullHeight / 3 },
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessLow
+                        )
+                    )
+                },
                 exit = fadeOut(animationSpec = tween(150)) + shrinkVertically()
             ) {
                 ChatMessageItem(message = message)
