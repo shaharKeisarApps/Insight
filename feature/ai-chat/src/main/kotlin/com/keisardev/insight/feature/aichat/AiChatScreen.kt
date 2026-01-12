@@ -82,6 +82,8 @@ import dev.zacsweers.metro.AssistedFactory
 import dev.zacsweers.metro.AssistedInject
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import kotlinx.parcelize.Parcelize
 
 @Parcelize
@@ -303,57 +305,87 @@ private fun ChatMessageItem(
     message: ChatMessage,
     modifier: Modifier = Modifier,
 ) {
-    Row(
+    Column(
         modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = if (message.isUser) Arrangement.End else Arrangement.Start,
+        horizontalAlignment = if (message.isUser) Alignment.End else Alignment.Start,
     ) {
-        if (!message.isUser) {
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center,
+        Row(
+            horizontalArrangement = if (message.isUser) Arrangement.End else Arrangement.Start,
+        ) {
+            if (!message.isUser) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Psychology,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+
+            Surface(
+                shape = RoundedCornerShape(
+                    topStart = 20.dp,
+                    topEnd = 20.dp,
+                    bottomStart = if (message.isUser) 20.dp else 4.dp,
+                    bottomEnd = if (message.isUser) 4.dp else 20.dp,
+                ),
+                color = if (message.isUser) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainer
+                },
+                tonalElevation = if (message.isUser) 0.dp else 1.dp,
+                shadowElevation = if (message.isUser) 2.dp else 0.dp,
+                modifier = Modifier.widthIn(max = 280.dp),
             ) {
-                Icon(
-                    imageVector = Icons.Default.Psychology,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                Text(
+                    text = message.content,
+                    modifier = Modifier.padding(
+                        horizontal = 16.dp,
+                        vertical = 12.dp
+                    ),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (message.isUser) {
+                        MaterialTheme.colorScheme.onPrimary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
                 )
             }
-            Spacer(modifier = Modifier.width(8.dp))
         }
 
-        Surface(
-            shape = RoundedCornerShape(
-                topStart = 20.dp,
-                topEnd = 20.dp,
-                bottomStart = if (message.isUser) 20.dp else 4.dp,
-                bottomEnd = if (message.isUser) 4.dp else 20.dp,
-            ),
-            color = if (message.isUser) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.surfaceContainer
-            },
-            tonalElevation = if (message.isUser) 0.dp else 1.dp,
-            shadowElevation = if (message.isUser) 2.dp else 0.dp,
-            modifier = Modifier.widthIn(max = 280.dp),
-        ) {
-            Text(
-                text = message.content,
-                modifier = Modifier.padding(
-                    horizontal = 16.dp,
-                    vertical = 12.dp
-                ),
-                style = MaterialTheme.typography.bodyLarge,
-                color = if (message.isUser) {
-                    MaterialTheme.colorScheme.onPrimary
-                } else {
-                    MaterialTheme.colorScheme.onSurface
-                },
+        // Timestamp
+        Text(
+            text = formatMessageTime(message.timestamp),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            modifier = Modifier.padding(
+                start = if (message.isUser) 0.dp else 40.dp,
+                top = 4.dp
             )
+        )
+    }
+}
+
+private fun formatMessageTime(timestamp: kotlinx.datetime.Instant): String {
+    val now = kotlinx.datetime.Clock.System.now()
+    val duration = now - timestamp
+
+    return when {
+        duration.inWholeSeconds < 60 -> "Just now"
+        duration.inWholeMinutes < 60 -> "${duration.inWholeMinutes}m ago"
+        duration.inWholeHours < 24 -> "${duration.inWholeHours}h ago"
+        else -> {
+            val date = timestamp.toLocalDateTime(kotlinx.datetime.TimeZone.currentSystemDefault())
+            "${date.hour.toString().padStart(2, '0')}:${date.minute.toString().padStart(2, '0')}"
         }
     }
 }
