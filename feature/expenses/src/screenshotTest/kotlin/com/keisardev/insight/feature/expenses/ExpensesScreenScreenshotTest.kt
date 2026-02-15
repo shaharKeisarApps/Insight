@@ -29,6 +29,7 @@ fun ExpensesScreenEmptyLightPreview() {
         ExpensesUi(
             state = ExpensesScreen.State(
                 isLoading = false,
+                isRefreshing = false,
                 expenses = emptyList(),
                 eventSink = noOpEventSink,
             ),
@@ -48,6 +49,7 @@ fun ExpensesScreenEmptyDarkPreview() {
         ExpensesUi(
             state = ExpensesScreen.State(
                 isLoading = false,
+                isRefreshing = false,
                 expenses = emptyList(),
                 eventSink = noOpEventSink,
             ),
@@ -65,6 +67,7 @@ fun ExpensesScreenLoadingPreview() {
         ExpensesUi(
             state = ExpensesScreen.State(
                 isLoading = true,
+                isRefreshing = false,
                 expenses = emptyList(),
                 eventSink = noOpEventSink,
             ),
@@ -82,6 +85,7 @@ fun ExpensesScreenWithDataLightPreview() {
         ExpensesUi(
             state = ExpensesScreen.State(
                 isLoading = false,
+                isRefreshing = false,
                 expenses = sampleExpenses,
                 eventSink = noOpEventSink,
             ),
@@ -101,6 +105,7 @@ fun ExpensesScreenWithDataDarkPreview() {
         ExpensesUi(
             state = ExpensesScreen.State(
                 isLoading = false,
+                isRefreshing = false,
                 expenses = sampleExpenses,
                 eventSink = noOpEventSink,
             ),
@@ -118,6 +123,7 @@ fun ExpensesScreenSingleItemPreview() {
         ExpensesUi(
             state = ExpensesScreen.State(
                 isLoading = false,
+                isRefreshing = false,
                 expenses = listOf(sampleExpenses.first()),
                 eventSink = noOpEventSink,
             ),
@@ -135,6 +141,7 @@ fun ExpensesScreenLargeFontPreview() {
         ExpensesUi(
             state = ExpensesScreen.State(
                 isLoading = false,
+                isRefreshing = false,
                 expenses = sampleExpenses.take(2),
                 eventSink = noOpEventSink,
             ),
@@ -150,6 +157,7 @@ fun ExpensesScreenSmallFontPreview() {
         ExpensesUi(
             state = ExpensesScreen.State(
                 isLoading = false,
+                isRefreshing = false,
                 expenses = sampleExpenses.take(2),
                 eventSink = noOpEventSink,
             ),
