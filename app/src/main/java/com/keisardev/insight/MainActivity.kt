@@ -6,6 +6,7 @@ import androidx.activity.ComponentActivity
 import androidx.activity.SystemBarStyle
 import androidx.activity.compose.setContent
 import androidx.activity.enableEdgeToEdge
+import androidx.compose.animation.SharedTransitionLayout
 import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.material.icons.Icons
@@ -125,12 +126,16 @@ fun MainContent() {
             }
         },
     ) {
-        // NavigableCircuitContent handles the back stack navigation and transitions
-        NavigableCircuitContent(
-            navigator = navigator,
-            backStack = backStack,
-            modifier = Modifier.fillMaxSize(),
-        )
+        // SharedTransitionLayout enables shared element transitions between screens
+        // Provides SharedTransitionScope to all nested screens
+        SharedTransitionLayout {
+            // NavigableCircuitContent handles the back stack navigation and transitions
+            NavigableCircuitContent(
+                navigator = navigator,
+                backStack = backStack,
+                modifier = Modifier.fillMaxSize(),
+            )
+        }
     }
 }
 

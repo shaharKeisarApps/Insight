@@ -1,5 +1,24 @@
 package com.keisardev.insight.feature.aichat
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.animateColorAsState
+import androidx.compose.animation.core.EaseInOutCubic
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.StartOffset
+import androidx.compose.animation.core.animateFloat
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.layout.offset
+import androidx.compose.ui.draw.scale
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -25,7 +44,6 @@ import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.Warning
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
@@ -63,6 +81,8 @@ import dev.zacsweers.metro.AssistedFactory
 import dev.zacsweers.metro.AssistedInject
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 import kotlinx.parcelize.Parcelize
 
 @Parcelize
@@ -144,30 +164,44 @@ class AiChatPresenter @AssistedInject constructor(
 @CircuitInject(AiChatScreen::class, AppScope::class)
 @Composable
 fun AiChatUi(state: AiChatScreen.State, modifier: Modifier = Modifier) {
-    Scaffold(modifier = modifier) { paddingValues ->
+    Scaffold(
+        modifier = modifier.fillMaxSize(),
+        bottomBar = {
+            // Only show input when AI is enabled
+            if (state.isAiEnabled) {
+                // Wrap ChatInput in Surface container with imePadding
+                // This prevents padding accumulation by applying IME offset before ChatInput internal padding
+                Surface(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .imePadding(),
+                    color = MaterialTheme.colorScheme.surface,
+                    shadowElevation = 0.dp,
+                    tonalElevation = 0.dp,
+                ) {
+                    ChatInput(
+                        inputText = state.inputText,
+                        isLoading = state.isLoading,
+                        onInputChange = { state.eventSink(AiChatScreen.Event.OnInputChange(it)) },
+                        onSend = { state.eventSink(AiChatScreen.Event.OnSend) },
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
+            }
+        }
+    ) { paddingValues ->
         if (!state.isAiEnabled) {
             AiDisabledContent(modifier = Modifier.padding(paddingValues))
         } else {
-            Column(
+            // Messages list fills available space
+            // Scaffold automatically provides padding for bottomBar
+            ChatMessagesList(
+                messages = state.messages,
+                isLoading = state.isLoading,
                 modifier = Modifier
                     .fillMaxSize()
-                    .padding(paddingValues)
-                    .imePadding(),
-            ) {
-                ChatMessagesList(
-                    messages = state.messages,
-                    isLoading = state.isLoading,
-                    modifier = Modifier.weight(1f),
-                )
-
-                ChatInput(
-                    inputText = state.inputText,
-                    isLoading = state.isLoading,
-                    onInputChange = { state.eventSink(AiChatScreen.Event.OnInputChange(it)) },
-                    onSend = { state.eventSink(AiChatScreen.Event.OnSend) },
-                    modifier = Modifier.fillMaxWidth(),
-                )
-            }
+                    .padding(paddingValues),
+            )
         }
     }
 }
@@ -229,11 +263,44 @@ private fun ChatMessagesList(
     LazyColumn(
         modifier = modifier.fillMaxWidth(),
         state = listState,
-        contentPadding = PaddingValues(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp),
+        contentPadding = PaddingValues(horizontal = 12.dp, vertical = 16.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         items(messages, key = { it.id }) { message ->
-            ChatMessageItem(message = message)
+            AnimatedVisibility(
+                visible = true,
+                enter = if (message.isUser) {
+                    // User messages: animate from input field position (bottom) with scale
+                    fadeIn(animationSpec = tween(200)) +
+                    slideInVertically(
+                        initialOffsetY = { fullHeight -> fullHeight },
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMedium
+                        )
+                    ) +
+                    scaleIn(
+                        initialScale = 0.8f,
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessMedium
+                        )
+                    )
+                } else {
+                    // AI messages: gentle slide from top
+                    fadeIn(animationSpec = tween(300)) +
+                    slideInVertically(
+                        initialOffsetY = { fullHeight -> -fullHeight / 3 },
+                        animationSpec = spring(
+                            dampingRatio = Spring.DampingRatioMediumBouncy,
+                            stiffness = Spring.StiffnessLow
+                        )
+                    )
+                },
+                exit = fadeOut(animationSpec = tween(150)) + shrinkVertically()
+            ) {
+                ChatMessageItem(message = message)
+            }
         }
 
         if (isLoading) {
@@ -249,52 +316,87 @@ private fun ChatMessageItem(
     message: ChatMessage,
     modifier: Modifier = Modifier,
 ) {
-    Row(
+    Column(
         modifier = modifier.fillMaxWidth(),
-        horizontalArrangement = if (message.isUser) Arrangement.End else Arrangement.Start,
+        horizontalAlignment = if (message.isUser) Alignment.End else Alignment.Start,
     ) {
-        if (!message.isUser) {
-            Box(
-                modifier = Modifier
-                    .size(32.dp)
-                    .clip(CircleShape)
-                    .background(MaterialTheme.colorScheme.primaryContainer),
-                contentAlignment = Alignment.Center,
+        Row(
+            horizontalArrangement = if (message.isUser) Arrangement.End else Arrangement.Start,
+        ) {
+            if (!message.isUser) {
+                Box(
+                    modifier = Modifier
+                        .size(32.dp)
+                        .clip(CircleShape)
+                        .background(MaterialTheme.colorScheme.primaryContainer),
+                    contentAlignment = Alignment.Center,
+                ) {
+                    Icon(
+                        imageVector = Icons.Default.Psychology,
+                        contentDescription = null,
+                        modifier = Modifier.size(20.dp),
+                        tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                    )
+                }
+                Spacer(modifier = Modifier.width(8.dp))
+            }
+
+            Surface(
+                shape = RoundedCornerShape(
+                    topStart = 20.dp,
+                    topEnd = 20.dp,
+                    bottomStart = if (message.isUser) 20.dp else 4.dp,
+                    bottomEnd = if (message.isUser) 4.dp else 20.dp,
+                ),
+                color = if (message.isUser) {
+                    MaterialTheme.colorScheme.primary
+                } else {
+                    MaterialTheme.colorScheme.surfaceContainer
+                },
+                tonalElevation = if (message.isUser) 0.dp else 1.dp,
+                shadowElevation = if (message.isUser) 2.dp else 0.dp,
+                modifier = Modifier.widthIn(max = 280.dp),
             ) {
-                Icon(
-                    imageVector = Icons.Default.Psychology,
-                    contentDescription = null,
-                    modifier = Modifier.size(20.dp),
-                    tint = MaterialTheme.colorScheme.onPrimaryContainer,
+                Text(
+                    text = message.content,
+                    modifier = Modifier.padding(
+                        horizontal = 16.dp,
+                        vertical = 12.dp
+                    ),
+                    style = MaterialTheme.typography.bodyLarge,
+                    color = if (message.isUser) {
+                        MaterialTheme.colorScheme.onPrimary
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
                 )
             }
-            Spacer(modifier = Modifier.width(8.dp))
         }
 
-        Surface(
-            shape = RoundedCornerShape(
-                topStart = 16.dp,
-                topEnd = 16.dp,
-                bottomStart = if (message.isUser) 16.dp else 4.dp,
-                bottomEnd = if (message.isUser) 4.dp else 16.dp,
-            ),
-            color = if (message.isUser) {
-                MaterialTheme.colorScheme.primary
-            } else {
-                MaterialTheme.colorScheme.surfaceVariant
-            },
-            modifier = Modifier.widthIn(max = 300.dp),
-        ) {
-            Text(
-                text = message.content,
-                modifier = Modifier.padding(12.dp),
-                style = MaterialTheme.typography.bodyMedium,
-                color = if (message.isUser) {
-                    MaterialTheme.colorScheme.onPrimary
-                } else {
-                    MaterialTheme.colorScheme.onSurfaceVariant
-                },
+        // Timestamp
+        Text(
+            text = formatMessageTime(message.timestamp),
+            style = MaterialTheme.typography.labelSmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.6f),
+            modifier = Modifier.padding(
+                start = if (message.isUser) 0.dp else 40.dp,
+                top = 4.dp
             )
+        )
+    }
+}
+
+private fun formatMessageTime(timestamp: kotlinx.datetime.Instant): String {
+    val now = Clock.System.now()
+    val duration = now - timestamp
+
+    return when {
+        duration.inWholeSeconds < 60 -> "Just now"
+        duration.inWholeMinutes < 60 -> "${duration.inWholeMinutes}m ago"
+        duration.inWholeHours < 24 -> "${duration.inWholeHours}h ago"
+        else -> {
+            val date = timestamp.toLocalDateTime(TimeZone.currentSystemDefault())
+            "${date.hour.toString().padStart(2, '0')}:${date.minute.toString().padStart(2, '0')}"
         }
     }
 }
@@ -328,17 +430,34 @@ private fun LoadingIndicator(modifier: Modifier = Modifier) {
             Row(
                 modifier = Modifier.padding(horizontal = 16.dp, vertical = 12.dp),
                 verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                CircularProgressIndicator(
-                    modifier = Modifier.size(16.dp),
-                    strokeWidth = 2.dp,
-                )
-                Text(
-                    text = "Thinking...",
-                    style = MaterialTheme.typography.bodyMedium,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
-                )
+                // Animated bouncing dots
+                repeat(3) { index ->
+                    val infiniteTransition = rememberInfiniteTransition(
+                        label = "typing_dot_$index"
+                    )
+                    val offsetY by infiniteTransition.animateFloat(
+                        initialValue = 0f,
+                        targetValue = -8f,
+                        animationSpec = infiniteRepeatable(
+                            animation = tween(
+                                durationMillis = 600,
+                                easing = EaseInOutCubic
+                            ),
+                            repeatMode = RepeatMode.Reverse,
+                            initialStartOffset = StartOffset(index * 150)
+                        ),
+                        label = "dot_offset_$index"
+                    )
+                    Box(
+                        modifier = Modifier
+                            .size(8.dp)
+                            .offset(y = offsetY.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.onSurfaceVariant)
+                    )
+                }
             }
         }
     }
@@ -352,37 +471,66 @@ private fun ChatInput(
     onSend: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val isEnabled = inputText.isNotBlank() && !isLoading
+    val scale by animateFloatAsState(
+        targetValue = if (isEnabled) 1f else 0.9f,
+        animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy),
+        label = "send_button_scale"
+    )
+    val iconColor by animateColorAsState(
+        targetValue = if (isEnabled) {
+            MaterialTheme.colorScheme.primary
+        } else {
+            MaterialTheme.colorScheme.onSurfaceVariant.copy(alpha = 0.38f)
+        },
+        animationSpec = tween(300),
+        label = "send_button_color"
+    )
+
     Surface(
         modifier = modifier,
+        color = MaterialTheme.colorScheme.surface,
         shadowElevation = 8.dp,
+        tonalElevation = 2.dp,
     ) {
         Row(
             modifier = Modifier
                 .padding(horizontal = 16.dp, vertical = 8.dp),
-            verticalAlignment = Alignment.CenterVertically,
+            verticalAlignment = Alignment.Bottom,
         ) {
             OutlinedTextField(
                 value = inputText,
                 onValueChange = onInputChange,
                 modifier = Modifier.weight(1f),
-                placeholder = { Text("Ask about your expenses...") },
-                maxLines = 3,
+                placeholder = {
+                    Text(
+                        "Ask about your expenses...",
+                        style = MaterialTheme.typography.bodyLarge
+                    )
+                },
+                textStyle = MaterialTheme.typography.bodyLarge,
+                maxLines = 4,
                 enabled = !isLoading,
                 shape = RoundedCornerShape(24.dp),
+                colors = androidx.compose.material3.TextFieldDefaults.colors(
+                    focusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHighest,
+                    unfocusedContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                    disabledContainerColor = MaterialTheme.colorScheme.surfaceContainerHigh,
+                ),
             )
             Spacer(modifier = Modifier.width(8.dp))
             IconButton(
                 onClick = onSend,
-                enabled = inputText.isNotBlank() && !isLoading,
+                enabled = isEnabled,
+                modifier = Modifier
+                    .scale(scale)
+                    .size(48.dp)
             ) {
                 Icon(
                     imageVector = Icons.AutoMirrored.Filled.Send,
                     contentDescription = "Send",
-                    tint = if (inputText.isNotBlank() && !isLoading) {
-                        MaterialTheme.colorScheme.primary
-                    } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
+                    tint = iconColor,
+                    modifier = Modifier.size(24.dp)
                 )
             }
         }

@@ -1,5 +1,17 @@
 package com.keisardev.insight.feature.reports
 
+import androidx.compose.animation.AnimatedContent
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.EaseOutCubic
+import androidx.compose.animation.core.animateFloatAsState
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
+import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -209,18 +221,27 @@ fun ReportsUi(state: ReportsScreen.State, modifier: Modifier = Modifier) {
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        when (state.selectedViewType) {
-            ReportViewType.SPENDING -> SpendingView(
-                totalSpending = state.totalSpending,
-                categoryBreakdown = state.categoryBreakdown,
-            )
-            ReportViewType.EARNINGS -> EarningsView(
-                totalIncome = state.totalIncome,
-                incomeCategoryBreakdown = state.incomeCategoryBreakdown,
-            )
-            ReportViewType.BALANCE -> BalanceView(
-                financialSummary = state.financialSummary,
-            )
+        AnimatedContent(
+            targetState = state.selectedViewType,
+            transitionSpec = {
+                (fadeIn(animationSpec = tween(300)) + slideInVertically { it / 2 }) togetherWith
+                (fadeOut(animationSpec = tween(150)) + slideOutVertically { -it / 2 })
+            },
+            label = "report_view_switch"
+        ) { viewType ->
+            when (viewType) {
+                ReportViewType.SPENDING -> SpendingView(
+                    totalSpending = state.totalSpending,
+                    categoryBreakdown = state.categoryBreakdown,
+                )
+                ReportViewType.EARNINGS -> EarningsView(
+                    totalIncome = state.totalIncome,
+                    incomeCategoryBreakdown = state.incomeCategoryBreakdown,
+                )
+                ReportViewType.BALANCE -> BalanceView(
+                    financialSummary = state.financialSummary,
+                )
+            }
         }
     }
 }
@@ -280,10 +301,18 @@ private fun SpendingView(
         Spacer(modifier = Modifier.height(24.dp))
 
         if (categoryBreakdown.isEmpty()) {
-            EmptyState(
-                icon = Icons.Outlined.BarChart,
-                title = "No expenses this month",
-            )
+            AnimatedVisibility(
+                visible = true,
+                enter = fadeIn(animationSpec = tween(400)) + scaleIn(
+                    initialScale = 0.9f,
+                    animationSpec = tween(400)
+                ),
+            ) {
+                EmptyState(
+                    icon = Icons.Outlined.BarChart,
+                    title = "No expenses this month",
+                )
+            }
         } else {
             Text(
                 text = "By Category",
@@ -294,8 +323,23 @@ private fun SpendingView(
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                items(categoryBreakdown) { spending ->
-                    CategoryBreakdownItem(spending = spending)
+                items(
+                    count = categoryBreakdown.size,
+                    key = { index -> categoryBreakdown[index].category.id }
+                ) { index ->
+                    val spending = categoryBreakdown[index]
+                    AnimatedVisibility(
+                        visible = true,
+                        enter = fadeIn(
+                            animationSpec = tween(
+                                durationMillis = 300,
+                                delayMillis = index * 50
+                            )
+                        ) + expandVertically(),
+                        label = "category_item_$index"
+                    ) {
+                        CategoryBreakdownItem(spending = spending)
+                    }
                 }
             }
         }
@@ -319,10 +363,18 @@ private fun EarningsView(
         Spacer(modifier = Modifier.height(24.dp))
 
         if (incomeCategoryBreakdown.isEmpty()) {
-            EmptyState(
-                icon = Icons.Outlined.BarChart,
-                title = "No earnings this month",
-            )
+            AnimatedVisibility(
+                visible = true,
+                enter = fadeIn(animationSpec = tween(400)) + scaleIn(
+                    initialScale = 0.9f,
+                    animationSpec = tween(400)
+                ),
+            ) {
+                EmptyState(
+                    icon = Icons.Outlined.BarChart,
+                    title = "No earnings this month",
+                )
+            }
         } else {
             Text(
                 text = "By Category",
@@ -333,8 +385,23 @@ private fun EarningsView(
             LazyColumn(
                 verticalArrangement = Arrangement.spacedBy(12.dp),
             ) {
-                items(incomeCategoryBreakdown) { spending ->
-                    IncomeCategoryBreakdownItem(spending = spending)
+                items(
+                    count = incomeCategoryBreakdown.size,
+                    key = { index -> incomeCategoryBreakdown[index].category.id }
+                ) { index ->
+                    val spending = incomeCategoryBreakdown[index]
+                    AnimatedVisibility(
+                        visible = true,
+                        enter = fadeIn(
+                            animationSpec = tween(
+                                durationMillis = 300,
+                                delayMillis = index * 50
+                            )
+                        ) + expandVertically(),
+                        label = "income_category_item_$index"
+                    ) {
+                        IncomeCategoryBreakdownItem(spending = spending)
+                    }
                 }
             }
         }
@@ -501,6 +568,15 @@ private fun TotalCard(
     contentColor: androidx.compose.ui.graphics.Color,
     modifier: Modifier = Modifier,
 ) {
+    val animatedAmount by animateFloatAsState(
+        targetValue = amount.toFloat(),
+        animationSpec = tween(
+            durationMillis = 1000,
+            easing = EaseOutCubic
+        ),
+        label = "amount_count_up"
+    )
+
     Card(
         modifier = modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(
@@ -520,7 +596,7 @@ private fun TotalCard(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = formatCurrency(amount),
+                text = formatCurrency(animatedAmount.toDouble()),
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold,
                 color = contentColor,
@@ -535,6 +611,15 @@ private fun CategoryBreakdownItem(
     modifier: Modifier = Modifier,
 ) {
     val categoryColor = spending.category.color
+    val animatedProgress by animateFloatAsState(
+        targetValue = spending.percentage,
+        animationSpec = tween(
+            durationMillis = 800,
+            easing = EaseOutCubic
+        ),
+        label = "progress_${spending.category.id}"
+    )
+
     Card(
         modifier = modifier.fillMaxWidth(),
     ) {
@@ -578,7 +663,7 @@ private fun CategoryBreakdownItem(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 LinearProgressIndicator(
-                    progress = { spending.percentage },
+                    progress = { animatedProgress },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(8.dp)
@@ -603,6 +688,15 @@ private fun IncomeCategoryBreakdownItem(
     modifier: Modifier = Modifier,
 ) {
     val categoryColor = spending.category.color
+    val animatedProgress by animateFloatAsState(
+        targetValue = spending.percentage,
+        animationSpec = tween(
+            durationMillis = 800,
+            easing = EaseOutCubic
+        ),
+        label = "progress_${spending.category.id}"
+    )
+
     Card(
         modifier = modifier.fillMaxWidth(),
     ) {
@@ -646,7 +740,7 @@ private fun IncomeCategoryBreakdownItem(
                 }
                 Spacer(modifier = Modifier.height(8.dp))
                 LinearProgressIndicator(
-                    progress = { spending.percentage },
+                    progress = { animatedProgress },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(8.dp)

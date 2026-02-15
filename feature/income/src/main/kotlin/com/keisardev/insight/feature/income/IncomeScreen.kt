@@ -1,5 +1,16 @@
 package com.keisardev.insight.feature.income
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.core.Spring
+import androidx.compose.animation.core.spring
+import androidx.compose.animation.core.tween
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.shrinkVertically
+import androidx.compose.animation.slideInVertically
+import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -11,6 +22,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.rememberLazyListState
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.outlined.AccountBalanceWallet
@@ -18,14 +30,16 @@ import androidx.compose.material3.AssistChip
 import androidx.compose.material3.AssistChipDefaults
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
-import androidx.compose.material3.CircularProgressIndicator
+import com.keisardev.insight.core.ui.component.SkeletonTransactionItem
 import androidx.compose.material3.FloatingActionButton
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
@@ -100,39 +114,70 @@ class IncomePresenter @AssistedInject constructor(
 @CircuitInject(IncomeScreen::class, AppScope::class)
 @Composable
 fun IncomeUi(state: IncomeScreen.State, modifier: Modifier = Modifier) {
+    val listState = rememberLazyListState()
+
+    // FAB visibility: show when at top or scrolling up, hide when scrolling down
+    val isFabVisible by remember {
+        derivedStateOf {
+            listState.firstVisibleItemIndex == 0 ||
+            listState.layoutInfo.visibleItemsInfo.firstOrNull()?.let { first ->
+                val previousIndex = listState.layoutInfo.visibleItemsInfo.getOrNull(1)?.index ?: 0
+                first.index <= previousIndex
+            } ?: true
+        }
+    }
+
     Scaffold(
         modifier = modifier,
         floatingActionButton = {
-            FloatingActionButton(
-                onClick = { state.eventSink(IncomeScreen.Event.OnAddClick) },
+            AnimatedVisibility(
+                visible = isFabVisible || state.incomes.isEmpty(),
+                enter = slideInVertically(initialOffsetY = { it }) + fadeIn(),
+                exit = slideOutVertically(targetOffsetY = { it }) + fadeOut(),
             ) {
-                Icon(Icons.Default.Add, contentDescription = "Add income")
+                FloatingActionButton(
+                    onClick = { state.eventSink(IncomeScreen.Event.OnAddClick) },
+                ) {
+                    Icon(Icons.Default.Add, contentDescription = "Add income")
+                }
             }
         },
     ) { paddingValues ->
         when {
             state.isLoading -> {
-                Box(
+                LazyColumn(
                     modifier = Modifier
                         .fillMaxSize()
                         .padding(paddingValues),
-                    contentAlignment = Alignment.Center,
+                    contentPadding = PaddingValues(16.dp),
+                    verticalArrangement = Arrangement.spacedBy(12.dp),
                 ) {
-                    CircularProgressIndicator()
+                    items(5) {
+                        SkeletonTransactionItem()
+                    }
                 }
             }
             state.incomes.isEmpty() -> {
-                EmptyState(
-                    icon = Icons.Outlined.AccountBalanceWallet,
-                    title = "No earnings recorded yet",
-                    subtitle = "Tap + to add your first income",
-                    modifier = Modifier.padding(paddingValues),
-                )
+                AnimatedVisibility(
+                    visible = true,
+                    enter = fadeIn(animationSpec = tween(400)) + scaleIn(
+                        initialScale = 0.9f,
+                        animationSpec = tween(400)
+                    ),
+                ) {
+                    EmptyState(
+                        icon = Icons.Outlined.AccountBalanceWallet,
+                        title = "No earnings recorded yet",
+                        subtitle = "Tap + to add your first income",
+                        modifier = Modifier.padding(paddingValues),
+                    )
+                }
             }
             else -> {
                 IncomeList(
                     incomes = state.incomes,
                     onIncomeClick = { state.eventSink(IncomeScreen.Event.OnIncomeClick(it)) },
+                    listState = listState,
                     modifier = Modifier.padding(paddingValues),
                 )
             }
@@ -144,18 +189,28 @@ fun IncomeUi(state: IncomeScreen.State, modifier: Modifier = Modifier) {
 private fun IncomeList(
     incomes: List<Income>,
     onIncomeClick: (Long) -> Unit,
+    listState: androidx.compose.foundation.lazy.LazyListState,
     modifier: Modifier = Modifier,
 ) {
     LazyColumn(
+        state = listState,
         modifier = modifier.fillMaxSize(),
         contentPadding = PaddingValues(16.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
     ) {
         items(incomes, key = { it.id }) { income ->
-            IncomeItem(
-                income = income,
-                onClick = { onIncomeClick(income.id) },
-            )
+            AnimatedVisibility(
+                visible = true,
+                enter = fadeIn(animationSpec = tween(300)) + expandVertically(
+                    animationSpec = spring(dampingRatio = Spring.DampingRatioMediumBouncy)
+                ),
+                exit = fadeOut(animationSpec = tween(150)) + shrinkVertically()
+            ) {
+                IncomeItem(
+                    income = income,
+                    onClick = { onIncomeClick(income.id) },
+                )
+            }
         }
     }
 }
