@@ -47,50 +47,65 @@ Parse `$ARGUMENTS` to determine scope:
 
 ---
 
-## Navigation Coordinates (Device: 1080x2404 @ 390dpi)
+## UI Interaction Strategy
 
-Nav bar bounds: `[0,2150][1080,2345]` — center y=2248
+### PREFERRED: Semantic Tapping (device-independent)
 
-| Tab | Bounds | Tap X | Tap Y |
-|-----|--------|-------|-------|
-| Settings | [0,2150][200,2345] | 100 | 2248 |
-| AI Chat | [220,2150][420,2345] | 320 | 2248 |
-| Reports | [440,2150][640,2345] | 540 | 2248 |
-| Income | [660,2150][860,2345] | 760 | 2248 |
-| Expenses | [880,2150][1080,2345] | 980 | 2248 |
+Use `.claude/scripts/adb-tap.sh` helper functions instead of hardcoded coordinates.
+These find elements by `content-desc`, `text`, or `resource-id` in the uiautomator XML dump,
+then tap the center of the element's bounds. This works regardless of device, DPI, or layout direction.
 
-### Screen-Specific Coordinates
+```bash
+source .claude/scripts/adb-tap.sh
+refresh_dump
 
-**Expenses Screen**:
-- FAB (+): x=108, y=2042
-- List items: start y≈130
+# Navigate to tabs
+tap_by_text "Settings"    # Tap by visible text label
+tap_by_text "AI Chat"
+tap_by_text "Expenses"
 
-**Add Expense Form**:
-- Amount: x=540, y=290
-- Description: x=540, y=650
-- Date: x=540, y=535
-- Category chips row 1: Food x=190, Entertainment x=410, Bills x=625 (y≈1130)
-- Category chips row 2: Shopping x=240, Other x=430, Health x=610 (y≈1200)
-- Category chips row 3: Transport x=590 (y≈1270)
-- Add Expense button: x=540, y=1638
+# Tap by content description
+tap_by_desc "Add expense"  # FAB
+tap_by_desc "Send"         # Chat send button
 
-**Add Income Form**:
-- Income Type toggle: One-time x=200, Recurring x=520 (y≈332)
-- Amount: x=540, y=460
-- Description: x=540, y=590
-- Add Income button: x=540, y=1205
+# Assert elements exist
+assert_text_exists "AI Engine"
+assert_desc_exists "Add income"
 
-**AI Chat Screen**:
-- Text input (keyboard closed): x=608, y=2062
-- Text input (keyboard open): bounds [176,1146][1041,1283]
-- Send button (keyboard open): x=97, y=1224 (tap parent container [39,1166][156,1283])
+# Navigate and screenshot
+nav_to "Reports"           # tap + sleep + refresh
+screenshot "reports"       # saves to /tmp/insight_reports_*.png
 
-### Coordinate Update Protocol
+# Tour all screens
+tour_all                   # visits all 5 tabs, screenshots each
+```
 
-Coordinates shift when UI changes. After any UI modification:
-1. `adb shell uiautomator dump /sdcard/ui.xml && adb pull /sdcard/ui.xml /tmp/`
-2. Parse and update coordinates in this file AND in `memory/device-validation.md`
-3. Screenshot to visually confirm: `adb shell screencap -p /sdcard/s.png && adb pull /sdcard/s.png /tmp/`
+### Navigation Tab Labels
+Tabs have `text` attributes in uiautomator: `"Settings"`, `"AI Chat"`, `"Reports"`, `"Income"`, `"Expenses"`.
+
+### Screen Element Identifiers (content-desc / text)
+
+**Expenses**: FAB=`desc:"Add expense"`, list items have `text` with amount/category
+**Income**: FAB=`desc:"Add income"`, badges=`text:"Recurring"` or `text:"One-time"`
+**AI Chat**: Send=`desc:"Send"`, Back=`desc:"Back"`, input has hint text
+**Settings**: AI segments=`text:"On-Device"`, `text:"Cloud"`, `text:"Auto"`; Clear=`text:"Clear All Data"`
+**Reports**: View chips=`text:"Spending"`, `text:"Earnings"`, `text:"Balance"`
+**Forms**: Categories by `text` (e.g., `text:"Food"`), Save by `text` (e.g., `text:"Add Expense"`)
+
+### FALLBACK: Pixel Coordinates (Pixel 10 Pro XL, RTL, 1080x2404 @ 390dpi)
+
+Only use these if `xmllint` is unavailable or semantic tapping fails.
+Full fallback coordinates are in `.claude/device-config.json` under `fallback_coordinates`.
+
+| Tab | X | Y |
+|-----|---|---|
+| Settings | 100 | 2248 |
+| AI Chat | 320 | 2248 |
+| Reports | 540 | 2248 |
+| Income | 760 | 2248 |
+| Expenses | 980 | 2248 |
+
+AI Engine segments: On-Device x=848,y=935; Cloud x=540,y=935; Auto x=233,y=935
 
 ---
 
@@ -179,45 +194,52 @@ Files: Presenters in feature/, repositories in core/data/, ExpenseTools in core/
 
 ### Test Data Setup (full/product runs only)
 ```bash
+source .claude/scripts/adb-tap.sh
 adb shell am start -n com.keisardev.insight/.MainActivity && sleep 2
-# Navigate to Settings → Clear All Data
-adb shell input tap 100 2248 && sleep 1.5
-# Find and tap "Clear All Data" then confirm dialog
+nav_to "Settings"
+tap_by_text "Clear All Data" && sleep 0.5
+refresh_dump
+tap_by_text "Clear" && sleep 1  # Confirm dialog
 ```
 
 ### P1: Expense CRUD Flow
 
 **P1a. Add Expense**
 ```bash
-adb shell input tap 980 2248 && sleep 1.5      # Expenses tab
-# Verify empty state via uiautomator
-adb shell input tap 108 2042 && sleep 1          # FAB
-adb shell input tap 540 290 && sleep 0.3 && adb shell input text "42.50"
-adb shell input keyevent 111 && sleep 0.3        # Dismiss keyboard (ESCAPE)
-adb shell input tap 540 650 && sleep 0.3 && adb shell input text "TestLunch"
-adb shell input keyevent 111 && sleep 0.3        # Dismiss keyboard
-adb shell input tap 190 1130 && sleep 0.3        # Food category
-adb shell input tap 540 1638 && sleep 1          # Add Expense
+nav_to "Expenses"
+assert_text_exists "No expenses yet"       # Verify empty state
+tap_by_desc "Add expense" && sleep 1       # FAB
+# Fill form using text-based tapping
+refresh_dump
+tap_by_text "Amount" && sleep 0.3 && adb shell input text "42.50"
+adb shell input keyevent 111 && sleep 0.3  # Dismiss keyboard (ESCAPE)
+refresh_dump
+tap_by_text "Description" && sleep 0.3 && adb shell input text "TestLunch"
+adb shell input keyevent 111 && sleep 0.3
+refresh_dump
+tap_by_text "Food" && sleep 0.3            # Category
+tap_by_text "Add Expense" && sleep 1       # Save
 ```
-**Verify**: uiautomator shows "$42.50", "TestLunch", "Food", today's date in list.
+**Verify**: `refresh_dump && assert_text_exists "$42.50" && assert_text_exists "Food"`
 
 **P1b. Edit Expense**
 - Tap expense item (get bounds from dump) → change amount to "55.00" → Save
-- **Verify**: List shows "$55.00"
+- **Verify**: `assert_text_exists "$55.00"`
 
 **P1c. Cross-Screen: Reports**
 ```bash
-adb shell input tap 540 2248 && sleep 1.5        # Reports tab
+nav_to "Reports"
 ```
-**Verify**: Total Spending "$55.00" (or "$42.50"), Food 100%, Spending view active.
+**Verify**: `assert_text_exists "$55.00"` (or "$42.50"), Food 100%, Spending view active.
 
 **P1d. Cross-Screen: AI Chat**
 ```bash
-adb shell input tap 320 2248 && sleep 1.5        # AI Chat tab
-adb shell input tap 608 2062 && sleep 0.5        # Text input
+nav_to "AI Chat"
+refresh_dump
+tap_by_desc "Send" # First find/tap the input area nearby
+# Type message
 adb shell input text "How%smuch%sdid%sI%sspend" && sleep 0.3
-# Find send button via uiautomator, tap parent container
-adb shell input tap 97 1224 && sleep 5            # Send + wait for AI
+tap_by_desc "Send" && sleep 5              # Send + wait for AI
 ```
 **Verify**: AI response mentions expense amount and "Food" category.
 
@@ -225,36 +247,53 @@ adb shell input tap 97 1224 && sleep 5            # Send + wait for AI
 
 **P2a. Add One-Time Income**
 ```bash
-adb shell input tap 760 2248 && sleep 1.5        # Income tab
-adb shell input tap 108 2042 && sleep 1          # FAB
+nav_to "Income"
+tap_by_desc "Add income" && sleep 1              # FAB
+refresh_dump
 # One-time selected by default
-# Fill amount "3000", description "TestSalary", select Salary category
-adb shell input tap 540 1205 && sleep 1          # Add Income
+tap_by_text "Amount" && sleep 0.3 && adb shell input text "3000"
+adb shell input keyevent 111 && sleep 0.3
+refresh_dump
+tap_by_text "Salary" && sleep 0.3                # Category
+tap_by_text "Add Income" && sleep 1              # Save
 ```
-**Verify**: "$3,000.00", "One-time" badge, "Salary" category.
+**Verify**: `assert_text_exists "$3,000.00"` + `assert_text_exists "One-time"` + `assert_text_exists "Salary"`
 
 **P2b. Add Recurring Income**
-- FAB → Toggle "Recurring" (x=520, y=332) → Amount "500" → Freelance category → Save
-- **Verify**: "$500.00", "Recurring" badge, "Freelance" category.
+```bash
+tap_by_desc "Add income" && sleep 1
+refresh_dump
+tap_by_text "Recurring" && sleep 0.3             # Toggle type
+tap_by_text "Amount" && sleep 0.3 && adb shell input text "500"
+adb shell input keyevent 111 && sleep 0.3
+refresh_dump
+tap_by_text "Freelance" && sleep 0.3
+tap_by_text "Add Income" && sleep 1
+```
+**Verify**: `assert_text_exists "$500.00"` + `assert_text_exists "Recurring"` + `assert_text_exists "Freelance"`
 
 **P2c. Reports Earnings**
 ```bash
-adb shell input tap 540 2248 && sleep 1.5        # Reports tab
-# Tap "Earnings" chip
+nav_to "Reports"
+tap_by_text "Earnings" && sleep 1
 ```
-**Verify**: Total "$3,500.00", Salary + Freelance breakdown.
+**Verify**: `assert_text_exists "$3,500.00"`, Salary + Freelance breakdown.
 
 **P2d. Reports Balance**
-- Tap "Balance" chip
-- **Verify**: Net balance = $3,500 - $55 = $3,445, positive indicator, savings rate shown, green/tertiary card.
+```bash
+tap_by_text "Balance" && sleep 1
+```
+**Verify**: Net balance = $3,500 - $55 = $3,445, positive indicator, savings rate shown.
 
 ### P3: Month Navigation
 - Previous month arrow → month label changes → totals $0 → Next month → totals restore.
 
 ### P4: Clear Data Cascade
 ```bash
-adb shell input tap 100 2248 && sleep 1.5        # Settings tab
-# Tap Clear All Data → Confirm
+nav_to "Settings"
+tap_by_text "Clear All Data" && sleep 0.5
+refresh_dump
+tap_by_text "Clear" && sleep 1                   # Confirm dialog
 ```
 **Verify across screens**:
 - Expenses: empty state "No expenses yet"
@@ -278,18 +317,17 @@ If no API key: shows disabled message, no input field, no crash.
 
 ### V1: All Screens Render
 ```bash
-for tab_x in 980 760 540 320 100; do
-  adb shell input tap $tab_x 2248 && sleep 1.5
-  adb shell screencap -p /sdcard/validate_${tab_x}.png
-  adb pull /sdcard/validate_${tab_x}.png /tmp/
-done
+source .claude/scripts/adb-tap.sh
+tour_all  # Visits all 5 tabs, screenshots each to /tmp/insight_*.png
 ```
 **Check**: 5 screens render, no crash, InsightTheme applied.
 
 ### V2: Keyboard Spacing — QUANTITATIVE
 ```bash
-adb shell input tap 320 2248 && sleep 1.5        # AI Chat
-adb shell input tap 608 2062 && sleep 1.5        # Open keyboard
+nav_to "AI Chat"
+# Tap input area to open keyboard (use hint text or desc)
+refresh_dump && tap_by_desc "Send"  # Nearby the input
+sleep 1.5
 ```
 Measure: `keyboard_top - textfield_bottom` in px → convert to dp (×160/390).
 **Threshold**: <= 24dp → PASS.

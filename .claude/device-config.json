@@ -1,0 +1,100 @@
+{
+  "device": {
+    "model": "Pixel 10 Pro XL",
+    "sdk": 36,
+    "screen_width": 1080,
+    "screen_height": 2404,
+    "dpi": 390,
+    "layout_direction": "RTL"
+  },
+  "app": {
+    "package": "com.keisardev.insight",
+    "activity": ".MainActivity",
+    "apk_path": "app/build/outputs/apk/debug/app-debug.apk"
+  },
+  "navigation": {
+    "tabs": ["Settings", "AI Chat", "Reports", "Income", "Expenses"],
+    "tap_method": "text",
+    "note": "Tab labels appear as text nodes in uiautomator. Use tap_by_text('Expenses') etc."
+  },
+  "screens": {
+    "expenses": {
+      "tab_label": "Expenses",
+      "fab_desc": "Add expense",
+      "empty_state_text": "No expenses yet",
+      "list_item_has": ["amount (e.g. $42.50)", "category", "date"]
+    },
+    "income": {
+      "tab_label": "Income",
+      "fab_desc": "Add income",
+      "empty_state_text": "No earnings recorded yet",
+      "badge_texts": ["Recurring", "One-time"]
+    },
+    "reports": {
+      "tab_label": "Reports",
+      "view_chips": ["Spending", "Earnings", "Balance"],
+      "month_nav": "< and > arrows for month navigation"
+    },
+    "ai_chat": {
+      "tab_label": "AI Chat",
+      "send_desc": "Send",
+      "back_desc": "Back",
+      "input_hint": "Ask about your finances..."
+    },
+    "settings": {
+      "tab_label": "Settings",
+      "items": {
+        "manage_categories": { "text": "Manage Categories" },
+        "currency": { "text": "Currency" },
+        "ai_engine": {
+          "title_text": "AI Engine",
+          "segments": ["On-Device", "Cloud", "Auto"],
+          "status_texts": {
+            "auto_local": "On-device model active — cloud as fallback",
+            "auto_cloud": "Cloud API active — no local model found",
+            "auto_none": "No AI backend available",
+            "local_ok": "Using on-device model — no internet needed",
+            "local_missing": "No local model installed — place a .gguf file in models/",
+            "cloud_ok": "Using OpenAI cloud API",
+            "cloud_missing": "Cloud API not configured — add API key to local.properties"
+          }
+        },
+        "clear_data": { "text": "Clear All Data" },
+        "about": { "text": "About" }
+      }
+    },
+    "add_expense_form": {
+      "amount_hint": "Amount",
+      "description_hint": "Description (optional)",
+      "category_names": ["Food", "Transport", "Entertainment", "Shopping", "Bills", "Health", "Other"],
+      "save_text": "Add Expense"
+    },
+    "add_income_form": {
+      "type_options": ["One-time", "Recurring"],
+      "amount_hint": "Amount",
+      "description_hint": "Description (optional)",
+      "category_names": ["Salary", "Freelance", "Investments", "Rental", "Gifts", "Bonus", "Other"],
+      "save_text": "Add Income"
+    }
+  },
+  "fallback_coordinates": {
+    "_note": "Only use these if semantic tapping fails. Recorded 2026-02-15 on Pixel 10 Pro XL, RTL layout.",
+    "nav_bar_y": 2248,
+    "nav_tabs": {
+      "Settings": { "x": 100, "y": 2248 },
+      "AI Chat": { "x": 320, "y": 2248 },
+      "Reports": { "x": 540, "y": 2248 },
+      "Income": { "x": 760, "y": 2248 },
+      "Expenses": { "x": 980, "y": 2248 }
+    },
+    "settings_ai_segments": {
+      "_note": "Bounds from uiautomator on 2026-02-15",
+      "On-Device": { "bounds": "[694,876][1002,993]", "x": 848, "y": 935 },
+      "Cloud": { "bounds": "[387,876][694,993]", "x": 540, "y": 935 },
+      "Auto": { "bounds": "[79,876][387,993]", "x": 233, "y": 935 }
+    },
+    "expenses_fab": { "x": 108, "y": 2042 },
+    "income_fab": { "x": 108, "y": 2042 },
+    "ai_chat_input_keyboard_closed": { "x": 608, "y": 2062 }
+  }
+}

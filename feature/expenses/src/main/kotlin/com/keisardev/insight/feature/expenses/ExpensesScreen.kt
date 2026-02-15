@@ -44,6 +44,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
@@ -159,6 +160,7 @@ fun ExpensesUi(state: ExpensesScreen.State, modifier: Modifier = Modifier) {
             ) {
                 FloatingActionButton(
                     onClick = { state.eventSink(ExpensesScreen.Event.OnAddClick) },
+                    modifier = Modifier.testTag("fab_add_expense"),
                 ) {
                     Icon(Icons.Default.Add, contentDescription = "Add expense")
                 }

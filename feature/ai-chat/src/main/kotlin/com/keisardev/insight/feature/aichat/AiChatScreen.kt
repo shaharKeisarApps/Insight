@@ -64,6 +64,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -517,7 +518,7 @@ private fun ChatInput(
             OutlinedTextField(
                 value = inputText,
                 onValueChange = onInputChange,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.weight(1f).testTag("input_chat"),
                 placeholder = {
                     Text(
                         "Ask about your expenses...",
@@ -539,6 +540,7 @@ private fun ChatInput(
                 onClick = onSend,
                 enabled = isEnabled,
                 modifier = Modifier
+                    .testTag("btn_send")
                     .scale(scale)
                     .size(48.dp)
             ) {
