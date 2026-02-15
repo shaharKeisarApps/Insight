@@ -13,7 +13,6 @@ import com.keisardev.insight.core.common.di.AppScope
 import com.keisardev.insight.core.data.repository.CategoryRepository
 import com.keisardev.insight.core.data.repository.ExpenseRepository
 import com.keisardev.insight.core.model.Category
-import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.Dispatchers
@@ -30,7 +29,6 @@ import kotlinx.datetime.toLocalDateTime
  * - AIAgent instances are created per request (cheap to create, single-use design)
  * - Conversation history is passed to maintain context across messages
  */
-@ContributesBinding(AppScope::class)
 @SingleIn(AppScope::class)
 @Inject
 class KoogAiService(
