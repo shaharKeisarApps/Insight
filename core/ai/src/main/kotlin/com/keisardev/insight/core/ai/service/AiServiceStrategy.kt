@@ -34,6 +34,12 @@ class AiServiceStrategy(
 
     var mode: AiMode = AiMode.AUTO
 
+    val isLocalAvailable: Boolean
+        get() = llamatikAiService.isEnabled
+
+    val isCloudAvailable: Boolean
+        get() = koogAiService.isEnabled
+
     private val activeService: AiService
         get() = when (mode) {
             AiMode.LOCAL -> llamatikAiService

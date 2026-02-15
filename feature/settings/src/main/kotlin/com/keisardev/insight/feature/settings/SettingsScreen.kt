@@ -1,5 +1,10 @@
 package com.keisardev.insight.feature.settings
 
+import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
@@ -15,13 +20,20 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
+import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.SegmentedButton
+import androidx.compose.material3.SegmentedButtonDefaults
+import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
@@ -37,6 +49,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.keisardev.insight.core.ai.service.AiMode
+import com.keisardev.insight.core.ai.service.AiServiceStrategy
 import com.keisardev.insight.core.common.di.AppScope
 import com.keisardev.insight.core.data.repository.ExpenseRepository
 import com.keisardev.insight.core.data.repository.IncomeRepository
@@ -55,6 +69,9 @@ import kotlinx.parcelize.Parcelize
 data object SettingsScreen : Screen {
     data class State(
         val showClearDataConfirmation: Boolean,
+        val aiMode: AiMode,
+        val isLocalModelAvailable: Boolean,
+        val isCloudAvailable: Boolean,
         val eventSink: (Event) -> Unit,
     ) : CircuitUiState
 
@@ -62,6 +79,7 @@ data object SettingsScreen : Screen {
         data object OnClearDataClick : Event
         data object OnClearDataConfirm : Event
         data object OnClearDataDismiss : Event
+        data class OnAiModeChange(val mode: AiMode) : Event
     }
 }
 
@@ -70,15 +88,20 @@ data object SettingsScreen : Screen {
 class SettingsPresenter(
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
+    private val aiServiceStrategy: AiServiceStrategy,
 ) : Presenter<SettingsScreen.State> {
 
     @Composable
     override fun present(): SettingsScreen.State {
         var showConfirmation by rememberRetained { mutableStateOf(false) }
+        var aiMode by rememberRetained { mutableStateOf(aiServiceStrategy.mode) }
         val scope = rememberCoroutineScope()
 
         return SettingsScreen.State(
             showClearDataConfirmation = showConfirmation,
+            aiMode = aiMode,
+            isLocalModelAvailable = aiServiceStrategy.isLocalAvailable,
+            isCloudAvailable = aiServiceStrategy.isCloudAvailable,
         ) { event ->
             when (event) {
                 SettingsScreen.Event.OnClearDataClick -> {
@@ -93,6 +116,10 @@ class SettingsPresenter(
                 }
                 SettingsScreen.Event.OnClearDataDismiss -> {
                     showConfirmation = false
+                }
+                is SettingsScreen.Event.OnAiModeChange -> {
+                    aiMode = event.mode
+                    aiServiceStrategy.mode = event.mode
                 }
             }
         }
@@ -146,6 +173,15 @@ fun SettingsUi(state: SettingsScreen.State, modifier: Modifier = Modifier) {
 
             Spacer(modifier = Modifier.height(16.dp))
 
+            AiEngineCard(
+                aiMode = state.aiMode,
+                isLocalAvailable = state.isLocalModelAvailable,
+                isCloudAvailable = state.isCloudAvailable,
+                onModeChange = { state.eventSink(SettingsScreen.Event.OnAiModeChange(it)) },
+            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
             Card(modifier = Modifier.fillMaxWidth()) {
                 SettingsItem(
                     icon = Icons.Default.Delete,
@@ -165,7 +201,7 @@ fun SettingsUi(state: SettingsScreen.State, modifier: Modifier = Modifier) {
                     subtitle = "Version 1.0.0",
                     onClick = {
                         scope.launch {
-                            snackbarHostState.showSnackbar("Expense Tracker MVP")
+                            snackbarHostState.showSnackbar("Insight v1.0.0")
                         }
                     },
                 )
@@ -205,6 +241,121 @@ fun SettingsUi(state: SettingsScreen.State, modifier: Modifier = Modifier) {
                 }
             },
         )
+    }
+}
+
+@Composable
+private fun AiEngineCard(
+    aiMode: AiMode,
+    isLocalAvailable: Boolean,
+    isCloudAvailable: Boolean,
+    onModeChange: (AiMode) -> Unit,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.surfaceContainerLow,
+        ),
+    ) {
+        Column(
+            modifier = Modifier.padding(16.dp),
+            verticalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+            ) {
+                Icon(
+                    imageVector = Icons.Default.SmartToy,
+                    contentDescription = null,
+                    tint = MaterialTheme.colorScheme.primary,
+                    modifier = Modifier.size(24.dp),
+                )
+                Text(
+                    text = "AI Engine",
+                    style = MaterialTheme.typography.titleMedium,
+                )
+            }
+
+            SingleChoiceSegmentedButtonRow(
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                val options = AiMode.entries
+                options.forEachIndexed { index, mode ->
+                    SegmentedButton(
+                        selected = aiMode == mode,
+                        onClick = { onModeChange(mode) },
+                        shape = SegmentedButtonDefaults.itemShape(
+                            index = index,
+                            count = options.size,
+                        ),
+                        icon = {
+                            SegmentedButtonDefaults.Icon(active = aiMode == mode) {
+                                Icon(
+                                    imageVector = when (mode) {
+                                        AiMode.LOCAL -> Icons.Default.PhoneAndroid
+                                        AiMode.CLOUD -> Icons.Default.Cloud
+                                        AiMode.AUTO -> Icons.Default.SmartToy
+                                    },
+                                    contentDescription = null,
+                                    modifier = Modifier.size(SegmentedButtonDefaults.IconSize),
+                                )
+                            }
+                        },
+                    ) {
+                        Text(
+                            text = when (mode) {
+                                AiMode.LOCAL -> "On-Device"
+                                AiMode.CLOUD -> "Cloud"
+                                AiMode.AUTO -> "Auto"
+                            },
+                        )
+                    }
+                }
+            }
+
+            // Status description
+            val statusText = when (aiMode) {
+                AiMode.LOCAL -> if (isLocalAvailable) {
+                    "Using on-device model — no internet needed"
+                } else {
+                    "No local model installed — place a .gguf file in models/"
+                }
+                AiMode.CLOUD -> if (isCloudAvailable) {
+                    "Using OpenAI cloud API"
+                } else {
+                    "Cloud API not configured — add API key to local.properties"
+                }
+                AiMode.AUTO -> when {
+                    isLocalAvailable -> "On-device model active — cloud as fallback"
+                    isCloudAvailable -> "Cloud API active — no local model found"
+                    else -> "No AI backend available"
+                }
+            }
+
+            val isWarning = when (aiMode) {
+                AiMode.LOCAL -> !isLocalAvailable
+                AiMode.CLOUD -> !isCloudAvailable
+                AiMode.AUTO -> !isLocalAvailable && !isCloudAvailable
+            }
+
+            AnimatedVisibility(
+                visible = true,
+                enter = fadeIn() + expandVertically(),
+                exit = fadeOut() + shrinkVertically(),
+            ) {
+                Text(
+                    text = statusText,
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (isWarning) {
+                        MaterialTheme.colorScheme.error
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+        }
     }
 }
 
@@ -266,6 +417,9 @@ private fun PreviewSettingsUi() {
         SettingsUi(
             state = SettingsScreen.State(
                 showClearDataConfirmation = false,
+                aiMode = AiMode.AUTO,
+                isLocalModelAvailable = true,
+                isCloudAvailable = true,
                 eventSink = {},
             )
         )
@@ -279,6 +433,9 @@ private fun PreviewSettingsUiWithDialog() {
         SettingsUi(
             state = SettingsScreen.State(
                 showClearDataConfirmation = true,
+                aiMode = AiMode.CLOUD,
+                isLocalModelAvailable = false,
+                isCloudAvailable = true,
                 eventSink = {},
             )
         )

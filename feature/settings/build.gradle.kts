@@ -5,3 +5,7 @@ plugins {
 android {
     namespace = "com.keisardev.insight.feature.settings"
 }
+
+dependencies {
+    implementation(project(":core:ai"))
+}
