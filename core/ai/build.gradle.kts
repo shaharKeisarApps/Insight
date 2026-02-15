@@ -12,9 +12,12 @@ dependencies {
     implementation(project(":core:model"))
     implementation(project(":core:data"))
 
-    // Koog AI Agent Framework
+    // Koog AI Agent Framework (cloud)
     implementation(libs.koog.agents)
     implementation(libs.koog.openai)
+
+    // Llamatik (on-device LLM inference)
+    implementation(libs.llamatik)
 
     // Ktor HTTP client (required by Koog)
     implementation(libs.ktor.client.okhttp)
