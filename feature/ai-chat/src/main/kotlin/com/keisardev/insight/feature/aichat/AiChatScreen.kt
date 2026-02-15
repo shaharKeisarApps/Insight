@@ -28,7 +28,10 @@ import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.imePadding
+import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.ime
+import androidx.compose.foundation.layout.navigationBars
+import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -52,6 +55,7 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -87,6 +91,7 @@ import kotlinx.parcelize.Parcelize
 
 @Parcelize
 data object AiChatScreen : Screen {
+    @Immutable
     data class State(
         val messages: List<ChatMessage>,
         val inputText: String,
@@ -165,17 +170,27 @@ class AiChatPresenter(
 @CircuitInject(AiChatScreen::class, AppScope::class)
 @Composable
 fun AiChatUi(state: AiChatScreen.State, modifier: Modifier = Modifier) {
+    // Calculate effective IME padding that accounts for NavigationSuiteScaffold.
+    // imePadding() measures from the window bottom, but our content sits above the app's
+    // NavigationBar (80dp) + system nav bar. Without this correction, the text field
+    // gets pushed too far up, creating a visible gap above the keyboard.
+    val density = LocalDensity.current
+    val imeBottom = WindowInsets.ime.getBottom(density)
+    val navBarBottom = WindowInsets.navigationBars.getBottom(density)
+    val navSuiteBarPx = with(density) { 80.dp.roundToPx() }
+    val effectiveImePadding = with(density) {
+        (imeBottom - navBarBottom - navSuiteBarPx).coerceAtLeast(0).toDp()
+    }
+
     Scaffold(
         modifier = modifier.fillMaxSize(),
         bottomBar = {
             // Only show input when AI is enabled
             if (state.isAiEnabled) {
-                // Wrap ChatInput in Surface container with imePadding
-                // This prevents padding accumulation by applying IME offset before ChatInput internal padding
                 Surface(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .imePadding(),
+                        .padding(bottom = effectiveImePadding),
                     color = MaterialTheme.colorScheme.surface,
                     shadowElevation = 0.dp,
                     tonalElevation = 0.dp,
