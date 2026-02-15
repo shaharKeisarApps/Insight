@@ -30,7 +30,6 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 
 /**
@@ -51,10 +50,11 @@ fun Modifier.shimmerEffect(): Modifier = composed {
         label = "shimmer_translate"
     )
 
+    val baseColor = MaterialTheme.colorScheme.surfaceVariant
     val shimmerColors = listOf(
-        Color.LightGray.copy(alpha = 0.3f),
-        Color.LightGray.copy(alpha = 0.5f),
-        Color.LightGray.copy(alpha = 0.3f),
+        baseColor.copy(alpha = 0.3f),
+        baseColor.copy(alpha = 0.5f),
+        baseColor.copy(alpha = 0.3f),
     )
 
     background(

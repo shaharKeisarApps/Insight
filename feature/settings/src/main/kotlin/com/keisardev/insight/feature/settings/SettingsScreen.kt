@@ -39,6 +39,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.keisardev.insight.core.common.di.AppScope
 import com.keisardev.insight.core.data.repository.ExpenseRepository
+import com.keisardev.insight.core.data.repository.IncomeRepository
 import com.keisardev.insight.core.designsystem.theme.InsightTheme
 import com.slack.circuit.codegen.annotations.CircuitInject
 import com.slack.circuit.retained.rememberRetained
@@ -68,6 +69,7 @@ data object SettingsScreen : Screen {
 @Inject
 class SettingsPresenter(
     private val expenseRepository: ExpenseRepository,
+    private val incomeRepository: IncomeRepository,
 ) : Presenter<SettingsScreen.State> {
 
     @Composable
@@ -85,6 +87,7 @@ class SettingsPresenter(
                 SettingsScreen.Event.OnClearDataConfirm -> {
                     scope.launch {
                         expenseRepository.deleteAllExpenses()
+                        incomeRepository.deleteAllIncome()
                         showConfirmation = false
                     }
                 }
@@ -147,7 +150,7 @@ fun SettingsUi(state: SettingsScreen.State, modifier: Modifier = Modifier) {
                 SettingsItem(
                     icon = Icons.Default.Delete,
                     title = "Clear All Data",
-                    subtitle = "Delete all expenses",
+                    subtitle = "Delete all expenses and income",
                     onClick = { state.eventSink(SettingsScreen.Event.OnClearDataClick) },
                     isDestructive = true,
                 )
@@ -188,7 +191,7 @@ fun SettingsUi(state: SettingsScreen.State, modifier: Modifier = Modifier) {
         AlertDialog(
             onDismissRequest = { state.eventSink(SettingsScreen.Event.OnClearDataDismiss) },
             title = { Text("Clear All Data?") },
-            text = { Text("This will delete all your expenses. This action cannot be undone.") },
+            text = { Text("This will delete all your expenses and income. This action cannot be undone.") },
             confirmButton = {
                 TextButton(
                     onClick = { state.eventSink(SettingsScreen.Event.OnClearDataConfirm) }
