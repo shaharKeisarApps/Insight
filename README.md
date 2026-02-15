@@ -1,36 +1,139 @@
 # Insight
 
-A modern Android personal finance management application built with cutting-edge Kotlin technologies. Track expenses, monitor income, view financial reports, and get AI-powered insights into your spending habits.
+**A modern Android personal finance app showcasing Metro DI, Circuit MVI, and dual AI backends (cloud + on-device).**
 
-## Features
+[![Kotlin](https://img.shields.io/badge/Kotlin-2.3.0_K2-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
+[![Android](https://img.shields.io/badge/Android-API_33+-3DDC84?logo=android&logoColor=white)](https://developer.android.com)
+[![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
-- **Expense Tracking** - Record and categorize daily expenses with descriptions and dates
-- **Income Management** - Track recurring and one-time income sources
-- **Financial Reports** - View monthly breakdowns of spending, earnings, and net balance with savings rate calculations
-- **AI-Powered Insights** - Chat with an AI assistant to query your financial data using natural language
-- **Smart Categorization** - AI suggests appropriate categories based on expense descriptions
+---
+
+## Why This Project?
+
+Most Android samples use Dagger/Hilt and MVVM. Insight takes a different path:
+
+- **Metro DI** — Compile-time dependency injection with zero reflection, zero runtime overhead
+- **Circuit** — Slack's MVI architecture with Compose-native state management
+- **Dual AI engine** — Cloud inference (Koog/OpenAI) and on-device inference (Llamatik/llama.cpp)
+- **NowInAndroid-style modules** — Clean multi-module architecture with convention plugins
+
+---
+
+## Screenshots
+
+<!-- Add screenshots here -->
+
+---
+
+## Architecture
+
+```
+                    ┌────────────┐
+                    │    App     │  AppGraph (Metro DI root)
+                    │ MainActivity│  NavigationSuiteScaffold
+                    └─────┬──────┘
+                          │
+          ┌───────┬───────┼───────┬───────┐
+          ▼       ▼       ▼       ▼       ▼
+     ┌─────────┐ ┌─────┐ ┌───────┐ ┌──────┐ ┌────────┐
+     │Expenses │ │Income│ │Reports│ │AI Chat│ │Settings│
+     │ Screen  │ │Screen│ │Screen │ │Screen│  │ Screen │
+     └────┬────┘ └──┬──┘ └───┬───┘ └──┬───┘ └───┬────┘
+          │         │        │        │          │
+     Circuit Presenters + @CircuitInject + Metro @AssistedInject
+          │         │        │        │          │
+          ▼         ▼        ▼        ▼          ▼
+     ┌──────────────────────────────────────────────┐
+     │              Core Modules                     │
+     │  ┌──────┐ ┌────┐ ┌──────────┐ ┌────┐ ┌────┐ │
+     │  │ data │ │ db │ │   model  │ │ ui │ │ ai │ │
+     │  └──────┘ └────┘ └──────────┘ └────┘ └──┬─┘ │
+     └──────────────────────────────────────────┼───┘
+                                                │
+                                   ┌────────────┤
+                                   ▼            ▼
+                              ┌────────┐  ┌──────────┐
+                              │  Koog  │  │ Llamatik │
+                              │ (Cloud)│  │ (Local)  │
+                              └────────┘  └──────────┘
+```
+
+**Key rules:**
+- Feature modules never depend on other features
+- Features only depend on core modules
+- `AiServiceStrategy` selects cloud or local AI automatically
+
+---
 
 ## Tech Stack
 
 | Technology | Version | Purpose |
 |------------|---------|---------|
-| **Kotlin** | 2.3.0 (K2) | Primary language with K2 compiler |
-| **Jetpack Compose** | 2025.12.01 | Declarative UI framework |
+| **Kotlin** | 2.3.0 (K2) | Language with K2 compiler |
+| **Jetpack Compose** | BOM 2025.12.01 | Declarative UI |
 | **Metro DI** | 0.9.2 | Compile-time dependency injection |
-| **Circuit** | 0.31.0 | MVI architecture and navigation |
+| **Circuit** | 0.31.0 | MVI architecture & navigation |
 | **SQLDelight** | 2.2.1 | Type-safe SQL database |
-| **Koog** | 0.6.0 | AI agent framework (OpenAI integration) |
+| **Koog** | 0.6.0 | Cloud AI agent framework (OpenAI) |
+| **Llamatik** | 0.16.0 | On-device LLM inference (llama.cpp) |
 | **Ktor** | 3.1.3 | HTTP client |
-| **Material 3** | Latest | Design system |
+| **Material 3** | Latest | Design system with dynamic color |
 
-**Platform Requirements:**
-- Min SDK: 33 (Android 13)
-- Target SDK: 36
-- Java: JVM 21
+**Requirements:** Min SDK 33 (Android 13) · Target SDK 36 · JDK 21
 
-## Architecture
+---
 
-The project follows the **NowInAndroid modular architecture** pattern with clear separation of concerns:
+## Key Architectural Highlights
+
+### Metro DI — Zero-Reflection Injection
+
+```kotlin
+@ContributesBinding(AppScope::class)
+@SingleIn(AppScope::class)
+@Inject
+class ExpenseRepositoryImpl(
+    private val database: InsightDatabase,
+) : ExpenseRepository
+```
+
+Metro generates all wiring at compile time. No `kapt`, no reflection, no runtime graph resolution.
+
+### Circuit MVI — Compose-Native State
+
+```kotlin
+@Parcelize
+data object ExpensesScreen : Screen {
+    data class State(
+        val expenses: List<Expense>,
+        val eventSink: (Event) -> Unit,
+    ) : CircuitUiState
+}
+
+@CircuitInject(ExpensesScreen::class, AppScope::class)
+@Composable
+fun ExpensesUi(state: ExpensesScreen.State, modifier: Modifier)
+```
+
+Presenters produce state, UI consumes it. No ViewModel, no LiveData — just Compose.
+
+### Dual AI Engine — Cloud + On-Device
+
+```kotlin
+@ContributesBinding(AppScope::class)
+@Inject
+class AiServiceStrategy(
+    private val llamatikAiService: LlamatikAiService,  // local
+    private val koogAiService: KoogAiService,           // cloud
+) : AiService {
+    var mode: AiMode = AiMode.AUTO  // LOCAL | CLOUD | AUTO
+}
+```
+
+`AUTO` mode tries on-device first, falls back to cloud. Zero API costs when running locally.
+
+---
+
+## Module Structure
 
 ```
 Insight/
@@ -41,165 +144,47 @@ Insight/
 │   ├── model/               # Domain models (Expense, Income, Category)
 │   ├── database/            # SQLDelight schema and drivers
 │   ├── data/                # Repository interfaces and implementations
-│   ├── designsystem/        # Material3 theme
+│   ├── designsystem/        # Material3 theme (InsightTheme)
 │   ├── ui/                  # Shared UI components
-│   └── ai/                  # Koog AI integration
+│   └── ai/                  # Dual AI service (Koog + Llamatik)
 └── feature/
-    ├── expenses/            # Expense tracking screen
-    ├── income/              # Income management screen
+    ├── expenses/            # Expense tracking with AI categorization
+    ├── income/              # Income management
     ├── reports/             # Financial reports and analytics
-    ├── ai-chat/             # AI chat interface
+    ├── ai-chat/             # AI chat with financial tools
     └── settings/            # App settings
 ```
 
-**Key Principles:**
-- Feature modules never depend on other feature modules
-- Features only depend on core modules
-- Core modules may depend on other core modules
-- Single-activity architecture with Circuit navigation
+---
 
-## Getting Started
-
-### Prerequisites
-
-- Android Studio Ladybug or later
-- JDK 21
-- Android SDK 36
-
-### Setup
-
-1. **Clone the repository**
-   ```bash
-   git clone https://github.com/your-username/Insight.git
-   cd Insight
-   ```
-
-2. **Configure AI Features (Optional)**
-
-   To enable AI-powered features, add your OpenAI API key to `local.properties`:
-   ```properties
-   OPENAI_API_KEY=sk-your-key-here
-   ```
-
-   Get an API key from https://platform.openai.com/api-keys
-
-   > Note: AI features gracefully degrade when no API key is provided.
-
-3. **Build the project**
-   ```bash
-   ./gradlew assembleDebug
-   ```
-
-### Build Commands
+## Build & Run
 
 ```bash
-# Build debug APK
+# Clone
+git clone https://github.com/shaharKeisarApps/Insight.git
+cd Insight
+
+# (Optional) Enable cloud AI
+echo "OPENAI_API_KEY=sk-your-key" >> local.properties
+
+# Build
 ./gradlew assembleDebug
 
-# Run all unit tests
+# Test
 ./gradlew test
-
-# Run tests for a specific module
-./gradlew :feature:expenses:test
-
-# Run a single test class
-./gradlew test --tests "com.keisardev.insight.ExampleUnitTest"
-
-# Run instrumented tests (requires device/emulator)
-./gradlew connectedAndroidTest
-
-# Clean build
-./gradlew clean
 ```
 
-## Key Frameworks
+### On-Device AI Setup (Optional)
 
-### Metro DI
+Place a GGUF model in the app's files directory to enable local inference:
 
-Compile-time dependency injection eliminating reflection overhead and runtime errors.
-
-```kotlin
-@CircuitInject(ExpensesScreen::class, AppScope::class)
-class ExpensesPresenter @AssistedInject constructor(
-    @Assisted private val navigator: Navigator,
-    private val expenseRepository: ExpenseRepository,
-) : Presenter<ExpensesScreen.State>
+```bash
+adb push phi-2.Q4_0.gguf /data/data/com.keisardev.insight/files/models/
 ```
 
-- `AppScope` - Root DI scope for application-wide singletons
-- `@ContributesBinding` - Contribute implementations to the graph
-- `@AssistedInject` - Runtime parameters like Navigator
+Recommended models: Phi-2 Q4_0 (~1.6 GB) for chat, any small model for categorization.
 
-### Circuit
-
-MVI architecture with unidirectional data flow and Compose integration.
-
-```kotlin
-@Parcelize
-data object ExpensesScreen : Screen {
-    data class State(
-        val expenses: List<Expense>,
-        val eventSink: (Event) -> Unit
-    ) : CircuitUiState
-
-    sealed interface Event : CircuitUiEvent {
-        data object AddExpense : Event
-        data class EditExpense(val id: Long) : Event
-    }
-}
-```
-
-### SQLDelight
-
-Type-safe SQL with generated Kotlin APIs.
-
-```sql
--- Expense.sq
-selectByDateRange:
-SELECT * FROM Expense
-WHERE date BETWEEN :startDate AND :endDate
-ORDER BY date DESC;
-
-selectTotalByCategory:
-SELECT categoryId, SUM(amount) as total
-FROM Expense
-WHERE date BETWEEN :startDate AND :endDate
-GROUP BY categoryId;
-```
-
-### Koog
-
-AI agent framework for natural language financial queries.
-
-```kotlin
-interface AiService {
-    suspend fun suggestCategory(description: String): String?
-    suspend fun chat(message: String): String
-}
-```
-
-## Default Categories
-
-The app comes pre-seeded with common expense categories:
-
-| Category | Icon | Color |
-|----------|------|-------|
-| Food | Restaurant | Red |
-| Transport | Car | Blue |
-| Entertainment | Movie | Purple |
-| Shopping | Shopping Bag | Yellow |
-| Bills | Receipt | Teal |
-| Health | Medical | Orange |
-| Other | More | Gray |
-
-## Convention Plugins
-
-Custom Gradle plugins in `build-logic/` for consistent module configuration:
-
-- `insight.android.application` - App module setup
-- `insight.android.library` - Library modules
-- `insight.android.compose` - Compose configuration with BOM
-- `insight.android.feature` - Feature modules with Circuit + Metro + KSP
+---
 
 ## License
 
