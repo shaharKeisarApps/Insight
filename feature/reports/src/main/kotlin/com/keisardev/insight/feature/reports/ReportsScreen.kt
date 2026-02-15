@@ -43,7 +43,6 @@ import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
@@ -85,7 +84,6 @@ import kotlinx.parcelize.Parcelize
 
 @Parcelize
 data object ReportsScreen : Screen {
-    @Immutable
     data class State(
         val selectedMonth: Month,
         val selectedYear: Int,

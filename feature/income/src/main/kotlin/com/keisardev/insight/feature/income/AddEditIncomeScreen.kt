@@ -53,7 +53,6 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.rememberDatePickerState
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -98,7 +97,6 @@ import kotlinx.parcelize.Parcelize
 
 @Parcelize
 data class AddEditIncomeScreen(val incomeId: Long?) : Screen {
-    @Immutable
     data class State(
         val isEditMode: Boolean,
         val amount: String,
