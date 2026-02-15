@@ -39,7 +39,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.keisardev.insight.core.common.di.AppScope
 import com.keisardev.insight.core.data.repository.ExpenseRepository
-import com.keisardev.insight.core.designsystem.theme.MetroDITestTheme
+import com.keisardev.insight.core.designsystem.theme.InsightTheme
 import com.slack.circuit.codegen.annotations.CircuitInject
 import com.slack.circuit.retained.rememberRetained
 import com.slack.circuit.runtime.CircuitUiEvent
@@ -65,7 +65,8 @@ data object SettingsScreen : Screen {
 }
 
 @CircuitInject(SettingsScreen::class, AppScope::class)
-class SettingsPresenter @Inject constructor(
+@Inject
+class SettingsPresenter(
     private val expenseRepository: ExpenseRepository,
 ) : Presenter<SettingsScreen.State> {
 
@@ -258,7 +259,7 @@ private fun SettingsItem(
 @Preview(showBackground = true)
 @Composable
 private fun PreviewSettingsUi() {
-    MetroDITestTheme {
+    InsightTheme {
         SettingsUi(
             state = SettingsScreen.State(
                 showClearDataConfirmation = false,
@@ -271,7 +272,7 @@ private fun PreviewSettingsUi() {
 @Preview(showBackground = true)
 @Composable
 private fun PreviewSettingsUiWithDialog() {
-    MetroDITestTheme {
+    InsightTheme {
         SettingsUi(
             state = SettingsScreen.State(
                 showClearDataConfirmation = true,

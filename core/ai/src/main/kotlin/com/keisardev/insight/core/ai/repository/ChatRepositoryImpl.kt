@@ -30,7 +30,8 @@ import kotlinx.datetime.Clock
  */
 @ContributesBinding(AppScope::class)
 @SingleIn(AppScope::class)
-class ChatRepositoryImpl @Inject constructor(
+@Inject
+class ChatRepositoryImpl(
     private val aiService: AiService,
 ) : ChatRepository {
 

@@ -3,7 +3,7 @@ package com.keisardev.insight.feature.expenses
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import com.android.tools.screenshot.PreviewTest
-import com.keisardev.insight.core.designsystem.theme.MetroDITestTheme
+import com.keisardev.insight.core.designsystem.theme.InsightTheme
 import com.keisardev.insight.core.model.Category
 import com.keisardev.insight.core.model.Expense
 import kotlinx.datetime.Clock
@@ -25,7 +25,7 @@ import kotlinx.datetime.LocalDate
 @Preview(showBackground = true, name = "Empty State - Light")
 @Composable
 fun ExpensesScreenEmptyLightPreview() {
-    MetroDITestTheme(darkTheme = false) {
+    InsightTheme(darkTheme = false) {
         ExpensesUi(
             state = ExpensesScreen.State(
                 isLoading = false,
@@ -44,7 +44,7 @@ fun ExpensesScreenEmptyLightPreview() {
 )
 @Composable
 fun ExpensesScreenEmptyDarkPreview() {
-    MetroDITestTheme(darkTheme = true) {
+    InsightTheme(darkTheme = true) {
         ExpensesUi(
             state = ExpensesScreen.State(
                 isLoading = false,
@@ -61,7 +61,7 @@ fun ExpensesScreenEmptyDarkPreview() {
 @Preview(showBackground = true, name = "Loading State")
 @Composable
 fun ExpensesScreenLoadingPreview() {
-    MetroDITestTheme {
+    InsightTheme {
         ExpensesUi(
             state = ExpensesScreen.State(
                 isLoading = true,
@@ -78,7 +78,7 @@ fun ExpensesScreenLoadingPreview() {
 @Preview(showBackground = true, name = "With Data - Light")
 @Composable
 fun ExpensesScreenWithDataLightPreview() {
-    MetroDITestTheme(darkTheme = false) {
+    InsightTheme(darkTheme = false) {
         ExpensesUi(
             state = ExpensesScreen.State(
                 isLoading = false,
@@ -97,7 +97,7 @@ fun ExpensesScreenWithDataLightPreview() {
 )
 @Composable
 fun ExpensesScreenWithDataDarkPreview() {
-    MetroDITestTheme(darkTheme = true) {
+    InsightTheme(darkTheme = true) {
         ExpensesUi(
             state = ExpensesScreen.State(
                 isLoading = false,
@@ -114,7 +114,7 @@ fun ExpensesScreenWithDataDarkPreview() {
 @Preview(showBackground = true, name = "Single Expense")
 @Composable
 fun ExpensesScreenSingleItemPreview() {
-    MetroDITestTheme {
+    InsightTheme {
         ExpensesUi(
             state = ExpensesScreen.State(
                 isLoading = false,
@@ -131,7 +131,7 @@ fun ExpensesScreenSingleItemPreview() {
 @Preview(showBackground = true, name = "Large Font", fontScale = 1.5f)
 @Composable
 fun ExpensesScreenLargeFontPreview() {
-    MetroDITestTheme {
+    InsightTheme {
         ExpensesUi(
             state = ExpensesScreen.State(
                 isLoading = false,
@@ -146,7 +146,7 @@ fun ExpensesScreenLargeFontPreview() {
 @Preview(showBackground = true, name = "Small Font", fontScale = 0.85f)
 @Composable
 fun ExpensesScreenSmallFontPreview() {
-    MetroDITestTheme {
+    InsightTheme {
         ExpensesUi(
             state = ExpensesScreen.State(
                 isLoading = false,

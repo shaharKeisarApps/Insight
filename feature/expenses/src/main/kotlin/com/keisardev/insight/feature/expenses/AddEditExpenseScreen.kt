@@ -65,7 +65,7 @@ import androidx.compose.ui.unit.dp
 import com.keisardev.insight.core.common.di.AppScope
 import com.keisardev.insight.core.data.repository.CategoryRepository
 import com.keisardev.insight.core.data.repository.ExpenseRepository
-import com.keisardev.insight.core.designsystem.theme.MetroDITestTheme
+import com.keisardev.insight.core.designsystem.theme.InsightTheme
 import com.keisardev.insight.core.model.Category
 import com.keisardev.insight.core.model.Expense
 import com.keisardev.insight.core.ui.component.color
@@ -116,7 +116,8 @@ data class AddEditExpenseScreen(val expenseId: Long?) : Screen {
     }
 }
 
-class AddEditExpensePresenter @AssistedInject constructor(
+@AssistedInject
+class AddEditExpensePresenter(
     @Assisted private val screen: AddEditExpenseScreen,
     @Assisted private val navigator: Navigator,
     private val expenseRepository: ExpenseRepository,
@@ -441,7 +442,7 @@ private fun CategoryChip(
 @Preview(showBackground = true)
 @Composable
 private fun PreviewAddExpenseUi() {
-    MetroDITestTheme {
+    InsightTheme {
         val sampleCategories = listOf(
             Category(1, "Food", "restaurant", 0xFFE57373),
             Category(2, "Transport", "directions_car", 0xFF64B5F6),

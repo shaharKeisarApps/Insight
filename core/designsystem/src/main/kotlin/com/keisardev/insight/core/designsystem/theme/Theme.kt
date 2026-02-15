@@ -23,7 +23,7 @@ private val LightColorScheme = lightColorScheme(
 )
 
 @Composable
-fun MetroDITestTheme(
+fun InsightTheme(
     darkTheme: Boolean = isSystemInDarkTheme(),
     dynamicColor: Boolean = true,
     content: @Composable () -> Unit

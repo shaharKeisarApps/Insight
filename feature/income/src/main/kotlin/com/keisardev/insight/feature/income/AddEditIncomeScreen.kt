@@ -121,7 +121,8 @@ data class AddEditIncomeScreen(val incomeId: Long?) : Screen {
     }
 }
 
-class AddEditIncomePresenter @AssistedInject constructor(
+@AssistedInject
+class AddEditIncomePresenter(
     @Assisted private val screen: AddEditIncomeScreen,
     @Assisted private val navigator: Navigator,
     private val incomeRepository: IncomeRepository,
