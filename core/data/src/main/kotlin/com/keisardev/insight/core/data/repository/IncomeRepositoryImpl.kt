@@ -18,10 +18,12 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
+import kotlinx.datetime.DateTimeUnit
 import kotlinx.datetime.Instant
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.atStartOfDayIn
+import kotlinx.datetime.plus
 import kotlinx.datetime.toLocalDateTime
 
 @ContributesBinding(AppScope::class)
@@ -49,7 +51,9 @@ class IncomeRepositoryImpl(
         endDate: LocalDate,
     ): Flow<List<Income>> {
         val startMillis = startDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
-        val endMillis = endDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
+        // Add one day to end date to include the entire end day (SQL uses date < endMillis)
+        val endMillis = endDate.plus(1, DateTimeUnit.DAY)
+            .atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
         return database.incomeQueries.incomeSelectByDateRange(startMillis, endMillis)
             .asFlow()
             .mapToList(Dispatchers.IO)
@@ -58,7 +62,9 @@ class IncomeRepositoryImpl(
 
     override fun observeMonthlyTotal(startDate: LocalDate, endDate: LocalDate): Flow<Double> {
         val startMillis = startDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
-        val endMillis = endDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
+        // Add one day to end date to include the entire end day
+        val endMillis = endDate.plus(1, DateTimeUnit.DAY)
+            .atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
         return database.incomeQueries.incomeSelectMonthlyTotal(startMillis, endMillis)
             .asFlow()
             .mapToOneOrNull(Dispatchers.IO)
@@ -70,7 +76,9 @@ class IncomeRepositoryImpl(
         endDate: LocalDate,
     ): Flow<Map<IncomeCategory, Double>> {
         val startMillis = startDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
-        val endMillis = endDate.atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
+        // Add one day to end date to include the entire end day
+        val endMillis = endDate.plus(1, DateTimeUnit.DAY)
+            .atStartOfDayIn(TimeZone.currentSystemDefault()).toEpochMilliseconds()
         return database.incomeQueries.incomeSelectTotalByCategory(startMillis, endMillis)
             .asFlow()
             .mapToList(Dispatchers.IO)
