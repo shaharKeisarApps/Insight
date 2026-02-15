@@ -116,7 +116,8 @@ data class IncomeCategorySpending(
 )
 
 @CircuitInject(ReportsScreen::class, AppScope::class)
-class ReportsPresenter @Inject constructor(
+@Inject
+class ReportsPresenter(
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
     private val financialSummaryRepository: FinancialSummaryRepository,

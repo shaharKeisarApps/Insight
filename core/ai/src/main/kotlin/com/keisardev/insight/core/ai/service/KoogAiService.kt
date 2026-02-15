@@ -32,7 +32,8 @@ import kotlinx.datetime.toLocalDateTime
  */
 @ContributesBinding(AppScope::class)
 @SingleIn(AppScope::class)
-class KoogAiService @Inject constructor(
+@Inject
+class KoogAiService(
     private val aiConfig: AiConfig,
     private val expenseRepository: ExpenseRepository,
     private val categoryRepository: CategoryRepository,

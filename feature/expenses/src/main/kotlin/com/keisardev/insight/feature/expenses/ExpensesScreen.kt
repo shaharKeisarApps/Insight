@@ -50,7 +50,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.keisardev.insight.core.common.di.AppScope
 import com.keisardev.insight.core.data.repository.ExpenseRepository
-import com.keisardev.insight.core.designsystem.theme.MetroDITestTheme
+import com.keisardev.insight.core.designsystem.theme.InsightTheme
 import com.keisardev.insight.core.model.Category
 import com.keisardev.insight.core.model.Expense
 import com.keisardev.insight.core.ui.component.CategoryIconCircle
@@ -90,7 +90,8 @@ data object ExpensesScreen : Screen {
     }
 }
 
-class ExpensesPresenter @AssistedInject constructor(
+@AssistedInject
+class ExpensesPresenter(
     @Assisted private val navigator: Navigator,
     private val expenseRepository: ExpenseRepository,
 ) : Presenter<ExpensesScreen.State> {
@@ -303,7 +304,7 @@ private fun ExpenseItem(
 @Preview(showBackground = true)
 @Composable
 private fun PreviewExpensesUiEmpty() {
-    MetroDITestTheme {
+    InsightTheme {
         ExpensesUi(
             state = ExpensesScreen.State(
                 isLoading = false,
@@ -318,7 +319,7 @@ private fun PreviewExpensesUiEmpty() {
 @Preview(showBackground = true)
 @Composable
 private fun PreviewExpensesUiWithData() {
-    MetroDITestTheme {
+    InsightTheme {
         val sampleCategory = Category(
             id = 1,
             name = "Food",

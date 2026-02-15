@@ -25,7 +25,7 @@ import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import com.keisardev.insight.core.common.di.AppScope
-import com.keisardev.insight.core.designsystem.theme.MetroDITestTheme
+import com.keisardev.insight.core.designsystem.theme.InsightTheme
 import com.keisardev.insight.di.ActivityKey
 import com.keisardev.insight.feature.aichat.AiChatScreen
 import com.keisardev.insight.feature.expenses.ExpensesScreen
@@ -68,7 +68,7 @@ class MainActivity(
                 ) { darkTheme },
             )
 
-            MetroDITestTheme(darkTheme = darkTheme) {
+            InsightTheme(darkTheme = darkTheme) {
                 CircuitCompositionLocals(circuit) {
                     MainContent()
                 }

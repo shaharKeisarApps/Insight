@@ -80,7 +80,8 @@ data object IncomeScreen : Screen {
     }
 }
 
-class IncomePresenter @AssistedInject constructor(
+@AssistedInject
+class IncomePresenter(
     @Assisted private val navigator: Navigator,
     private val incomeRepository: IncomeRepository,
 ) : Presenter<IncomeScreen.State> {

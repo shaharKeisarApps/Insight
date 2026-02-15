@@ -65,7 +65,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.keisardev.insight.core.ai.repository.ChatRepository
 import com.keisardev.insight.core.common.di.AppScope
-import com.keisardev.insight.core.designsystem.theme.MetroDITestTheme
+import com.keisardev.insight.core.designsystem.theme.InsightTheme
 import com.keisardev.insight.core.model.ChatMessage
 import com.keisardev.insight.core.model.ChatRole
 import com.slack.circuit.codegen.annotations.CircuitInject
@@ -107,7 +107,8 @@ data object AiChatScreen : Screen {
  * Uses [ChatRepository] to manage chat state and AI interactions,
  * following the same patterns as other features in the app.
  */
-class AiChatPresenter @AssistedInject constructor(
+@AssistedInject
+class AiChatPresenter(
     @Assisted private val navigator: Navigator,
     private val chatRepository: ChatRepository,
 ) : Presenter<AiChatScreen.State> {
@@ -541,7 +542,7 @@ private fun ChatInput(
 @Preview(showBackground = true)
 @Composable
 private fun PreviewAiChatUi() {
-    MetroDITestTheme {
+    InsightTheme {
         AiChatUi(
             state = AiChatScreen.State(
                 messages = listOf(
@@ -568,7 +569,7 @@ private fun PreviewAiChatUi() {
 @Preview(showBackground = true)
 @Composable
 private fun PreviewAiChatUiDisabled() {
-    MetroDITestTheme {
+    InsightTheme {
         AiChatUi(
             state = AiChatScreen.State(
                 messages = emptyList(),

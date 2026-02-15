@@ -13,7 +13,8 @@ import dev.zacsweers.metro.SingleIn
  */
 @ContributesBinding(AppScope::class)
 @SingleIn(AppScope::class)
-class AiConfigImpl @Inject constructor() : AiConfig {
+@Inject
+class AiConfigImpl : AiConfig {
 
     override val isAiEnabled: Boolean
         get() = BuildConfig.OPENAI_API_KEY.isNotBlank()

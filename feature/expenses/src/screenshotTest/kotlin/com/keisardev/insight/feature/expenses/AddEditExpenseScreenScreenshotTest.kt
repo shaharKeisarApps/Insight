@@ -3,7 +3,7 @@ package com.keisardev.insight.feature.expenses
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.tooling.preview.Preview
 import com.android.tools.screenshot.PreviewTest
-import com.keisardev.insight.core.designsystem.theme.MetroDITestTheme
+import com.keisardev.insight.core.designsystem.theme.InsightTheme
 import com.keisardev.insight.core.model.Category
 import kotlinx.datetime.LocalDate
 
@@ -23,7 +23,7 @@ import kotlinx.datetime.LocalDate
 @Preview(showBackground = true, name = "Add Mode - Empty Form")
 @Composable
 fun AddExpenseEmptyFormPreview() {
-    MetroDITestTheme {
+    InsightTheme {
         AddEditExpenseUi(
             state = AddEditExpenseScreen.State(
                 isEditMode = false,
@@ -43,7 +43,7 @@ fun AddExpenseEmptyFormPreview() {
 @Preview(showBackground = true, name = "Add Mode - Partial Form")
 @Composable
 fun AddExpensePartialFormPreview() {
-    MetroDITestTheme {
+    InsightTheme {
         AddEditExpenseUi(
             state = AddEditExpenseScreen.State(
                 isEditMode = false,
@@ -63,7 +63,7 @@ fun AddExpensePartialFormPreview() {
 @Preview(showBackground = true, name = "Add Mode - Complete Form")
 @Composable
 fun AddExpenseCompleteFormPreview() {
-    MetroDITestTheme {
+    InsightTheme {
         AddEditExpenseUi(
             state = AddEditExpenseScreen.State(
                 isEditMode = false,
@@ -83,7 +83,7 @@ fun AddExpenseCompleteFormPreview() {
 @Preview(showBackground = true, name = "Add Mode - Saving")
 @Composable
 fun AddExpenseSavingPreview() {
-    MetroDITestTheme {
+    InsightTheme {
         AddEditExpenseUi(
             state = AddEditExpenseScreen.State(
                 isEditMode = false,
@@ -105,7 +105,7 @@ fun AddExpenseSavingPreview() {
 @Preview(showBackground = true, name = "Edit Mode - Light")
 @Composable
 fun EditExpenseLightPreview() {
-    MetroDITestTheme(darkTheme = false) {
+    InsightTheme(darkTheme = false) {
         AddEditExpenseUi(
             state = AddEditExpenseScreen.State(
                 isEditMode = true,
@@ -129,7 +129,7 @@ fun EditExpenseLightPreview() {
 )
 @Composable
 fun EditExpenseDarkPreview() {
-    MetroDITestTheme(darkTheme = true) {
+    InsightTheme(darkTheme = true) {
         AddEditExpenseUi(
             state = AddEditExpenseScreen.State(
                 isEditMode = true,
@@ -151,7 +151,7 @@ fun EditExpenseDarkPreview() {
 @Preview(showBackground = true, name = "Category - Food Selected")
 @Composable
 fun CategoryFoodSelectedPreview() {
-    MetroDITestTheme {
+    InsightTheme {
         AddEditExpenseUi(
             state = AddEditExpenseScreen.State(
                 isEditMode = false,
@@ -171,7 +171,7 @@ fun CategoryFoodSelectedPreview() {
 @Preview(showBackground = true, name = "Category - Transport Selected")
 @Composable
 fun CategoryTransportSelectedPreview() {
-    MetroDITestTheme {
+    InsightTheme {
         AddEditExpenseUi(
             state = AddEditExpenseScreen.State(
                 isEditMode = false,
@@ -193,7 +193,7 @@ fun CategoryTransportSelectedPreview() {
 @Preview(showBackground = true, name = "Large Font", fontScale = 1.5f)
 @Composable
 fun AddExpenseLargeFontPreview() {
-    MetroDITestTheme {
+    InsightTheme {
         AddEditExpenseUi(
             state = AddEditExpenseScreen.State(
                 isEditMode = false,
@@ -215,7 +215,7 @@ fun AddExpenseLargeFontPreview() {
 @Preview(showBackground = true, name = "Long Description")
 @Composable
 fun AddExpenseLongDescriptionPreview() {
-    MetroDITestTheme {
+    InsightTheme {
         AddEditExpenseUi(
             state = AddEditExpenseScreen.State(
                 isEditMode = false,
@@ -237,7 +237,7 @@ fun AddExpenseLongDescriptionPreview() {
 @Preview(showBackground = true, name = "Many Categories")
 @Composable
 fun AddExpenseManyCategoriesPreview() {
-    MetroDITestTheme {
+    InsightTheme {
         AddEditExpenseUi(
             state = AddEditExpenseScreen.State(
                 isEditMode = false,

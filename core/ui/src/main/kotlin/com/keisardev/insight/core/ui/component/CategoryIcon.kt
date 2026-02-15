@@ -16,7 +16,7 @@ import androidx.compose.material.icons.filled.Receipt
 import androidx.compose.material.icons.filled.Restaurant
 import androidx.compose.material.icons.filled.ShoppingBag
 import androidx.compose.material.icons.filled.Star
-import androidx.compose.material.icons.filled.TrendingUp
+import androidx.compose.material.icons.automirrored.filled.TrendingUp
 import androidx.compose.material.icons.filled.Work
 import androidx.compose.material3.Icon
 import androidx.compose.runtime.Composable
@@ -45,7 +45,7 @@ fun getCategoryIcon(iconName: String): ImageVector {
         // Income category icons
         "payments" -> Icons.Default.Payments
         "work" -> Icons.Default.Work
-        "trending_up" -> Icons.Default.TrendingUp
+        "trending_up" -> Icons.AutoMirrored.Default.TrendingUp
         "home" -> Icons.Default.Home
         "card_giftcard" -> Icons.Default.CardGiftcard
         "stars" -> Icons.Default.Star
