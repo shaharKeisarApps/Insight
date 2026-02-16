@@ -1,926 +1,338 @@
 ---
 name: quality-expert
-description: Elite code quality expertise for KMP projects. Use when configuring Detekt, ktlint, Spotless, custom lint rules, or enforcing code standards. Triggers on linting setup, code quality configuration, formatting rules, or static analysis questions.
+description: Elite code quality enforcement for KMP projects. Use for Detekt static analysis, Spotless/ktlint formatting, Android Lint, binary compatibility validation, code coverage with Kover, and CI quality gates.
 ---
 
 # Quality Expert Skill
 
 ## Overview
 
-Code quality tools for KMP:
-- **Detekt**: Static analysis (complexity, style, bugs)
-- **Spotless/ktlint**: Formatting
-- **Custom Lint**: Project-specific rules
-- **Architecture Rules**: Module boundary enforcement
+Code quality in Kotlin Multiplatform demands a layered approach: static analysis catches bugs and code smells, formatting enforcement eliminates style debates, binary compatibility validation prevents accidental API breaks, and code coverage ensures test adequacy. This skill covers the full quality toolchain from local development through CI enforcement.
 
-## Detekt Setup
+## When to Use
 
-### Installation
+- **Static Analysis**: Configuring Detekt rules, writing custom rules, managing baselines.
+- **Formatting**: Enforcing consistent style with Spotless + ktlint across all source sets.
+- **Linting**: Android Lint custom checks for KMP modules with Android targets.
+- **API Compatibility**: Preventing binary-incompatible changes with kotlinx-binary-compatibility-validator.
+- **Code Coverage**: Measuring and enforcing coverage thresholds with Kover.
+- **CI Quality Gates**: Blocking merges when quality standards are not met.
+
+## Quick Reference
+
+See [reference.md](reference.md) for configuration syntax and rule catalogs.
+See [examples.md](examples.md) for complete, copy-paste-ready configurations.
+
+## Tool Versions
+
+| Tool | Version | Notes |
+|------|---------|-------|
+| Detekt | 1.23.8 | Kotlin 2.0 compatible, type-resolution support |
+| Spotless | 8.2.1 | **Requires Java 17+** (breaking change from 6.x) |
+| ktlint | 1.5.0 | Used via Spotless integration, not standalone |
+| Binary Compatibility Validator | 0.17.0 | Gradle plugin for API dump/check |
+| Kover | 0.9.1 | JetBrains official KMP coverage tool |
+
+## Detekt (v1.23.8)
+
+### What It Does
+
+Detekt performs static code analysis on Kotlin sources. It detects code smells, complexity violations, naming issues, potential bugs, and style inconsistencies. It supports type resolution for deeper analysis and custom rule authoring.
+
+### Configuration Strategy
+
+1. **Start with defaults**: Use `buildUponDefaultConfig = true` to inherit sane defaults.
+2. **Override selectively**: Only customize rules you disagree with in `detekt.yml`.
+3. **Use baselines**: Generate a baseline for existing violations, then enforce zero new violations.
+4. **Enable type resolution**: Adds cross-file analysis (catches more issues, slower).
+
+### Gradle Setup
 
 ```kotlin
-// build.gradle.kts (root)
 plugins {
     id("io.gitlab.arturbosch.detekt") version "1.23.8"
 }
 
-// Configure for all subprojects
-subprojects {
-    apply(plugin = "io.gitlab.arturbosch.detekt")
+detekt {
+    buildUponDefaultConfig = true
+    allRules = false
+    config.setFrom(files("$rootDir/config/detekt/detekt.yml"))
+    baseline = file("$rootDir/config/detekt/baseline.xml")
+    parallel = true
+}
 
-    detekt {
-        buildUponDefaultConfig = true
-        config.setFrom(files("${rootProject.projectDir}/config/detekt/detekt.yml"))
-        baseline = file("${rootProject.projectDir}/config/detekt/baseline.xml")
-
-        // KMP support
-        source.setFrom(
-            "src/commonMain/kotlin",
-            "src/androidMain/kotlin",
-            "src/iosMain/kotlin",
-            "src/desktopMain/kotlin",
-        )
-    }
-
-    dependencies {
-        detektPlugins("io.gitlab.arturbosch.detekt:detekt-formatting:1.23.8")
-        detektPlugins("io.gitlab.arturbosch.detekt:detekt-rules-libraries:1.23.8")
-        detektPlugins("io.nlopez.compose.rules:detekt:0.4.22") // Compose rules
+// Enable type resolution for deeper analysis
+tasks.withType<io.gitlab.arturbosch.detekt.Detekt>().configureEach {
+    jvmTarget = "17"
+    reports {
+        html.required.set(true)
+        xml.required.set(true)   // For CI integration
+        sarif.required.set(true) // For GitHub Code Scanning
     }
 }
 ```
 
-### Configuration File
+### Baseline Workflow
 
-```yaml
-# config/detekt/detekt.yml
+Baselines let you adopt Detekt on an existing codebase without fixing every legacy issue upfront.
 
-build:
-  maxIssues: 0
-  excludeCorrectable: false
-  weights:
-    complexity: 2
-    formatting: 1
-    LongParameterList: 1
-    style: 1
-    comments: 1
+```bash
+# Generate baseline from current violations
+./gradlew detektBaseline
 
-config:
-  validation: true
-  warningsAsErrors: true
-  checkExhaustiveness: true
-
-processors:
-  active: true
-  exclude:
-    - 'DetektProgressListener'
-
-console-reports:
-  active: true
-
-output-reports:
-  active: true
-  exclude:
-    - 'TxtOutputReport'
-    - 'XmlOutputReport'
-
-# Rule sets
-complexity:
-  active: true
-  ComplexCondition:
-    active: true
-    threshold: 4
-  ComplexMethod:
-    active: true
-    threshold: 15
-  LargeClass:
-    active: true
-    threshold: 600
-  LongMethod:
-    active: true
-    threshold: 60
-  LongParameterList:
-    active: true
-    functionThreshold: 6
-    constructorThreshold: 8
-    ignoreDefaultParameters: true
-    ignoreDataClasses: true
-    ignoreAnnotatedParameter: ['Inject', 'Assisted', 'Provides']
-  NestedBlockDepth:
-    active: true
-    threshold: 4
-  TooManyFunctions:
-    active: true
-    thresholdInFiles: 15
-    thresholdInClasses: 15
-    thresholdInInterfaces: 15
-    thresholdInObjects: 15
-    thresholdInEnums: 15
-
-coroutines:
-  active: true
-  GlobalCoroutineUsage:
-    active: true
-  InjectDispatcher:
-    active: true
-    dispatcherNames:
-      - 'IO'
-      - 'Default'
-      - 'Unconfined'
-  RedundantSuspendModifier:
-    active: true
-  SleepInsteadOfDelay:
-    active: true
-  SuspendFunWithCoroutineScopeReceiver:
-    active: true
-  SuspendFunSwallowedCancellation:
-    active: true
-
-empty-blocks:
-  active: true
-  EmptyCatchBlock:
-    active: true
-    allowedExceptionNameRegex: '_|(ignore|expected).*'
-  EmptyClassBlock:
-    active: true
-  EmptyDefaultConstructor:
-    active: true
-  EmptyDoWhileBlock:
-    active: true
-  EmptyElseBlock:
-    active: true
-  EmptyFinallyBlock:
-    active: true
-  EmptyForBlock:
-    active: true
-  EmptyFunctionBlock:
-    active: true
-    ignoreOverridden: true
-  EmptyIfBlock:
-    active: true
-  EmptyInitBlock:
-    active: true
-  EmptyKtFile:
-    active: true
-  EmptySecondaryConstructor:
-    active: true
-  EmptyTryBlock:
-    active: true
-  EmptyWhenBlock:
-    active: true
-  EmptyWhileBlock:
-    active: true
-
-exceptions:
-  active: true
-  ExceptionRaisedInUnexpectedLocation:
-    active: true
-    methodNames:
-      - 'equals'
-      - 'finalize'
-      - 'hashCode'
-      - 'toString'
-  InstanceOfCheckForException:
-    active: true
-  NotImplementedDeclaration:
-    active: true
-  ObjectExtendsThrowable:
-    active: true
-  PrintStackTrace:
-    active: true
-  RethrowCaughtException:
-    active: true
-  ReturnFromFinally:
-    active: true
-  SwallowedException:
-    active: true
-    ignoredExceptionTypes:
-      - 'InterruptedException'
-      - 'MalformedURLException'
-      - 'NumberFormatException'
-      - 'ParseException'
-    allowedExceptionNameRegex: '_|(ignore|expected).*'
-  ThrowingExceptionFromFinally:
-    active: true
-  ThrowingExceptionInMain:
-    active: false
-  ThrowingExceptionsWithoutMessageOrCause:
-    active: true
-    excludes: ['**/test/**', '**/androidTest/**']
-    exceptions:
-      - 'ArrayIndexOutOfBoundsException'
-      - 'Exception'
-      - 'IllegalArgumentException'
-      - 'IllegalMonitorStateException'
-      - 'IllegalStateException'
-      - 'IndexOutOfBoundsException'
-      - 'NullPointerException'
-      - 'RuntimeException'
-      - 'Throwable'
-  ThrowingNewInstanceOfSameException:
-    active: true
-  TooGenericExceptionCaught:
-    active: true
-    excludes: ['**/test/**', '**/androidTest/**']
-    exceptionNames:
-      - 'ArrayIndexOutOfBoundsException'
-      - 'Error'
-      - 'Exception'
-      - 'IllegalMonitorStateException'
-      - 'IndexOutOfBoundsException'
-      - 'NullPointerException'
-      - 'RuntimeException'
-      - 'Throwable'
-    allowedExceptionNameRegex: '_|(ignore|expected).*'
-  TooGenericExceptionThrown:
-    active: true
-    exceptionNames:
-      - 'Error'
-      - 'Exception'
-      - 'RuntimeException'
-      - 'Throwable'
-
-naming:
-  active: true
-  ClassNaming:
-    active: true
-    classPattern: '[A-Z][a-zA-Z0-9]*'
-  ConstructorParameterNaming:
-    active: true
-    parameterPattern: '[a-z][A-Za-z0-9]*'
-    privateParameterPattern: '[a-z][A-Za-z0-9]*'
-    excludeClassPattern: '$^'
-  EnumNaming:
-    active: true
-    enumEntryPattern: '[A-Z][_a-zA-Z0-9]*'
-  ForbiddenClassName:
-    active: false
-  FunctionMaxLength:
-    active: true
-    maximumFunctionNameLength: 50
-  FunctionMinLength:
-    active: false
-  FunctionNaming:
-    active: true
-    excludes: ['**/test/**', '**/androidTest/**']
-    functionPattern: '[a-z][a-zA-Z0-9]*'
-    excludeClassPattern: '$^'
-    # Allow Compose naming
-    ignoreAnnotated: ['Composable']
-  FunctionParameterNaming:
-    active: true
-    parameterPattern: '[a-z][A-Za-z0-9]*'
-    excludeClassPattern: '$^'
-  InvalidPackageDeclaration:
-    active: true
-    rootPackage: 'com.app'
-  LambdaParameterNaming:
-    active: true
-    parameterPattern: '[a-z][A-Za-z0-9]*|_'
-  MatchingDeclarationName:
-    active: true
-    mustBeFirst: true
-  MemberNameEqualsClassName:
-    active: true
-    ignoreOverridden: true
-  NoNameShadowing:
-    active: true
-  NonBooleanPropertyPrefixedWithIs:
-    active: true
-  ObjectPropertyNaming:
-    active: true
-    constantPattern: '[A-Za-z][_A-Za-z0-9]*'
-    propertyPattern: '[A-Za-z][_A-Za-z0-9]*'
-    privatePropertyPattern: '[A-Za-z][_A-Za-z0-9]*'
-  PackageNaming:
-    active: true
-    packagePattern: '[a-z]+(\.[a-z][A-Za-z0-9]*)*'
-  TopLevelPropertyNaming:
-    active: true
-    constantPattern: '[A-Z][_A-Z0-9]*'
-    propertyPattern: '[A-Za-z][_A-Za-z0-9]*'
-    privatePropertyPattern: '_?[A-Za-z][_A-Za-z0-9]*'
-  VariableMaxLength:
-    active: true
-    maximumVariableNameLength: 40
-  VariableMinLength:
-    active: true
-    minimumVariableNameLength: 1
-  VariableNaming:
-    active: true
-    variablePattern: '[a-z][A-Za-z0-9]*'
-    privateVariablePattern: '[a-z][A-Za-z0-9]*'
-    excludeClassPattern: '$^'
-
-performance:
-  active: true
-  ArrayPrimitive:
-    active: true
-  CouldBeSequence:
-    active: true
-    threshold: 3
-  ForEachOnRange:
-    active: true
-    excludes: ['**/test/**', '**/androidTest/**']
-  SpreadOperator:
-    active: true
-    excludes: ['**/test/**', '**/androidTest/**']
-  UnnecessaryPartOfBinaryExpression:
-    active: true
-  UnnecessaryTemporaryInstantiation:
-    active: true
-
-potential-bugs:
-  active: true
-  AvoidReferentialEquality:
-    active: true
-  CastToNullableType:
-    active: true
-  Deprecation:
-    active: false
-  DontDowncastCollectionTypes:
-    active: true
-  DoubleMutabilityForCollection:
-    active: true
-  ElseCaseInsteadOfExhaustiveWhen:
-    active: true
-  EqualsAlwaysReturnsTrueOrFalse:
-    active: true
-  EqualsWithHashCodeExist:
-    active: true
-  ExitOutsideMain:
-    active: true
-  ExplicitGarbageCollectionCall:
-    active: true
-  HasPlatformType:
-    active: true
-  IgnoredReturnValue:
-    active: true
-    restrictToConfig: true
-    returnValueAnnotations:
-      - 'CheckResult'
-      - 'CheckReturnValue'
-    ignoreReturnValueAnnotations:
-      - 'CanIgnoreReturnValue'
-    returnValueTypes:
-      - 'arrow.core.Either'
-      - 'arrow.core.Option'
-      - 'kotlin.Result'
-  ImplicitDefaultLocale:
-    active: true
-  ImplicitUnitReturnType:
-    active: true
-  InvalidRange:
-    active: true
-  IteratorHasNextCallsNextMethod:
-    active: true
-  IteratorNotThrowingNoSuchElementException:
-    active: true
-  LateinitUsage:
-    active: true
-    excludes: ['**/test/**', '**/androidTest/**']
-    ignoreAnnotated: ['Inject']
-  MapGetWithNotNullAssertionOperator:
-    active: true
-  MissingPackageDeclaration:
-    active: true
-  NullCheckOnMutableProperty:
-    active: true
-  NullableToStringCall:
-    active: true
-  PropertyUsedBeforeDeclaration:
-    active: true
-  UnconditionalJumpStatementInLoop:
-    active: true
-  UnnecessaryNotNullCheck:
-    active: true
-  UnnecessaryNotNullOperator:
-    active: true
-  UnnecessarySafeCall:
-    active: true
-  UnreachableCatchBlock:
-    active: true
-  UnreachableCode:
-    active: true
-  UnsafeCallOnNullableType:
-    active: true
-    excludes: ['**/test/**', '**/androidTest/**']
-  UnsafeCast:
-    active: true
-  UnusedUnaryOperator:
-    active: true
-  UselessPostfixExpression:
-    active: true
-  WrongEqualsTypeParameter:
-    active: true
-
-style:
-  active: true
-  AlsoCouldBeApply:
-    active: true
-  BracesOnIfStatements:
-    active: true
-    singleLine: 'never'
-    multiLine: 'always'
-  BracesOnWhenStatements:
-    active: true
-    singleLine: 'necessary'
-    multiLine: 'consistent'
-  CanBeNonNullable:
-    active: true
-  CascadingCallWrapping:
-    active: true
-    includeElvis: true
-  ClassOrdering:
-    active: true
-  CollapsibleIfStatements:
-    active: true
-  DataClassContainsFunctions:
-    active: false
-  DataClassShouldBeImmutable:
-    active: true
-  DestructuringDeclarationWithTooManyEntries:
-    active: true
-    maxDestructuringEntries: 4
-  EqualsNullCall:
-    active: true
-  EqualsOnSignatureLine:
-    active: true
-  ExplicitCollectionElementAccessMethod:
-    active: true
-  ExplicitItLambdaParameter:
-    active: true
-  ExpressionBodySyntax:
-    active: true
-    includeLineWrapping: false
-  ForbiddenAnnotation:
-    active: true
-    annotations:
-      - reason: 'Use @Inject instead'
-        value: 'javax.inject.Inject'
-  ForbiddenComment:
-    active: true
-    values:
-      - reason: 'Remove TODO before merging'
-        value: 'TODO:'
-      - reason: 'Remove FIXME before merging'
-        value: 'FIXME:'
-      - reason: 'Remove STOPSHIP before merging'
-        value: 'STOPSHIP'
-    allowedPatterns: 'TODO\\(\\w+\\):'  # Allow TODO(username):
-  ForbiddenImport:
-    active: true
-    imports:
-      - value: 'java.util.stream.*'
-        reason: 'Use Kotlin stdlib instead'
-  ForbiddenMethodCall:
-    active: true
-    methods:
-      - reason: 'Use println for debug only'
-        value: 'kotlin.io.println'
-      - reason: 'Use proper logging'
-        value: 'java.io.PrintStream.println'
-  ForbiddenVoid:
-    active: true
-    ignoreOverridden: false
-    ignoreUsageInGenerics: false
-  FunctionOnlyReturningConstant:
-    active: true
-    ignoreOverridableFunction: true
-    ignoreActualFunction: true
-    excludedFunctions: []
-  LoopWithTooManyJumpStatements:
-    active: true
-    maxJumpCount: 2
-  MagicNumber:
-    active: true
-    excludes: ['**/test/**', '**/androidTest/**', '**/*Test.kt']
-    ignoreNumbers:
-      - '-1'
-      - '0'
-      - '1'
-      - '2'
-    ignoreHashCodeFunction: true
-    ignorePropertyDeclaration: true
-    ignoreLocalVariableDeclaration: false
-    ignoreConstantDeclaration: true
-    ignoreCompanionObjectPropertyDeclaration: true
-    ignoreAnnotation: true
-    ignoreNamedArgument: true
-    ignoreEnums: true
-    ignoreRanges: true
-    ignoreExtensionFunctions: true
-  MandatoryBracesLoops:
-    active: true
-  MaxChainedCallsOnSameLine:
-    active: true
-    maxChainedCalls: 5
-  MaxLineLength:
-    active: true
-    maxLineLength: 120
-    excludePackageStatements: true
-    excludeImportStatements: true
-    excludeCommentStatements: true
-    excludeRawStrings: true
-  MayBeConst:
-    active: true
-  ModifierOrder:
-    active: true
-  MultilineLambdaItParameter:
-    active: true
-  MultilineRawStringIndentation:
-    active: true
-    indentSize: 4
-    trimmingMethod: 'trimIndent'
-  NestedClassesVisibility:
-    active: true
-  NewLineAtEndOfFile:
-    active: true
-  NoTabs:
-    active: true
-  NullableBooleanCheck:
-    active: true
-  ObjectLiteralToLambda:
-    active: true
-  OptionalAbstractKeyword:
-    active: true
-  OptionalUnit:
-    active: false
-  PreferToOverPairSyntax:
-    active: true
-  ProtectedMemberInFinalClass:
-    active: true
-  RedundantExplicitType:
-    active: true
-  RedundantHigherOrderMapUsage:
-    active: true
-  RedundantVisibilityModifierRule:
-    active: true
-  ReturnCount:
-    active: true
-    max: 4
-    excludedFunctions:
-      - 'equals'
-    excludeLabeled: true
-    excludeReturnFromLambda: true
-    excludeGuardClauses: true
-  SafeCast:
-    active: true
-  SerialVersionUIDInSerializableClass:
-    active: true
-  SpacingBetweenPackageAndImports:
-    active: true
-  StringShouldBeRawString:
-    active: true
-    maxEscapedCharacterCount: 2
-    ignoredCharacters: []
-  ThrowsCount:
-    active: true
-    max: 3
-    excludeGuardClauses: true
-  TrailingWhitespace:
-    active: true
-  TrimMultilineRawString:
-    active: true
-    trimmingMethod: 'trimIndent'
-  UnderscoresInNumericLiterals:
-    active: true
-    acceptableLength: 4
-    allowNonStandardGrouping: false
-  UnnecessaryAbstractClass:
-    active: true
-  UnnecessaryAnnotationUseSiteTarget:
-    active: true
-  UnnecessaryApply:
-    active: true
-  UnnecessaryBackticks:
-    active: true
-  UnnecessaryBracesAroundTrailingLambda:
-    active: true
-  UnnecessaryFilter:
-    active: true
-  UnnecessaryInheritance:
-    active: true
-  UnnecessaryInnerClass:
-    active: true
-  UnnecessaryLet:
-    active: true
-  UnnecessaryParentheses:
-    active: true
-    allowForUnclearPrecedence: false
-  UntilInsteadOfRangeTo:
-    active: true
-  UnusedImports:
-    active: true
-  UnusedParameter:
-    active: true
-    allowedNames: '_|ignored|expected|serialVersionUID'
-  UnusedPrivateClass:
-    active: true
-  UnusedPrivateMember:
-    active: true
-    allowedNames: '(_|ignored|expected|serialVersionUID)'
-  UnusedPrivateProperty:
-    active: true
-    allowedNames: '_|ignored|expected|serialVersionUID'
-  UseAnyOrNoneInsteadOfFind:
-    active: true
-  UseArrayLiteralsInAnnotations:
-    active: true
-  UseCheckNotNull:
-    active: true
-  UseCheckOrError:
-    active: true
-  UseDataClass:
-    active: true
-    allowVars: false
-  UseEmptyCounterpart:
-    active: true
-  UseIfEmptyOrIfBlank:
-    active: true
-  UseIfInsteadOfWhen:
-    active: true
-    minimumBranches: 2
-  UseIsNullOrEmpty:
-    active: true
-  UseLet:
-    active: true
-  UseOrEmpty:
-    active: true
-  UseRequire:
-    active: true
-  UseRequireNotNull:
-    active: true
-  UseSumOfInsteadOfFlatMapSize:
-    active: true
-  UselessCallOnNotNull:
-    active: true
-  UtilityClassWithPublicConstructor:
-    active: true
-  VarCouldBeVal:
-    active: true
-    ignoreLateinitVar: false
-  WildcardImport:
-    active: true
-    excludeImports:
-      - 'java.util.*'
-      - 'kotlinx.coroutines.*'
+# This creates config/detekt/baseline.xml
+# Commit the baseline to version control
+# From now on, only NEW violations cause failures
 ```
 
-## Spotless / ktlint Setup
+**Rule**: Re-generate the baseline only when intentionally accepting violations. Never auto-regenerate in CI.
+
+### Key Rule Categories
+
+| Category | Purpose | Example Rules |
+|----------|---------|---------------|
+| `complexity` | Cyclomatic/cognitive complexity | `LongMethod`, `ComplexCondition`, `TooManyFunctions` |
+| `naming` | Naming conventions | `FunctionNaming`, `VariableNaming`, `PackageNaming` |
+| `style` | Code style | `MagicNumber`, `ReturnCount`, `WildcardImport` |
+| `potential-bugs` | Likely bugs | `UnreachableCode`, `UnsafeCallOnNullableType` |
+| `performance` | Performance issues | `SpreadOperator`, `ArrayPrimitive` |
+| `coroutines` | Coroutine misuse | `GlobalCoroutineUsage`, `RedundantSuspendModifier` |
+
+### Custom Rules
+
+Detekt supports writing project-specific rules. Place custom rules in a separate module.
+
+```
+project/
+  detekt-rules/
+    build.gradle.kts        # Depends on detekt-api
+    src/main/kotlin/
+      NoGlobalScopeRule.kt   # Custom rule implementation
+      CustomRuleSetProvider.kt
+```
+
+Register custom rules in the root build:
 
 ```kotlin
-// build.gradle.kts (root)
+dependencies {
+    detektPlugins(project(":detekt-rules"))
+}
+```
+
+## Spotless (v8.2.1)
+
+### What It Does
+
+Spotless is a formatting enforcement tool. It does not lint -- it formats. Combined with ktlint, it ensures every Kotlin file in the project follows identical style rules.
+
+### Breaking Change Warning
+
+Spotless 8.x requires **Java 17+**. If your CI or local environment uses Java 11, you must upgrade Java before upgrading Spotless. This is the most common migration failure.
+
+### Gradle Setup
+
+```kotlin
 plugins {
-    id("com.diffplug.spotless") version "8.1.0"
+    id("com.diffplug.spotless") version "8.2.1"
 }
 
 spotless {
     kotlin {
         target("**/*.kt")
-        targetExclude("**/build/**/*.kt")
-
-        ktlint("1.8.0")
-            .setEditorConfigPath("${rootProject.projectDir}/.editorconfig")
+        targetExclude("**/build/**")
+        ktlint("1.5.0")
             .editorConfigOverride(
                 mapOf(
-                    "ktlint_standard_filename" to "disabled",
-                    "ktlint_standard_function-naming" to "disabled",  // Compose
-                    "ktlint_standard_property-naming" to "disabled",  // Constants
-                    "ktlint_standard_trailing-comma-on-call-site" to "disabled",
-                    "ktlint_standard_trailing-comma-on-declaration-site" to "disabled",
+                    "ktlint_standard_no-wildcard-imports" to "disabled",
+                    "ktlint_code_style" to "ktlint_official",
+                    "max_line_length" to "120",
                 )
             )
-
-        trimTrailingWhitespace()
-        indentWithSpaces(4)
-        endWithNewline()
     }
-
     kotlinGradle {
         target("**/*.gradle.kts")
-        ktlint("1.8.0")
+        ktlint("1.5.0")
     }
 }
 ```
 
-### EditorConfig
+### ratchetFrom for Gradual Adoption
 
-```ini
-# .editorconfig
-root = true
-
-[*]
-charset = utf-8
-end_of_line = lf
-indent_size = 4
-indent_style = space
-insert_final_newline = true
-max_line_length = 120
-tab_width = 4
-trim_trailing_whitespace = true
-
-[*.{kt,kts}]
-ij_kotlin_allow_trailing_comma = true
-ij_kotlin_allow_trailing_comma_on_call_site = true
-ij_kotlin_imports_layout = *,java.**,javax.**,kotlin.**,^
-
-# Compose
-ktlint_function_naming_ignore_when_annotated_with = Composable
-```
-
-## Compose Detekt Rules
-
-```yaml
-# Additional rules for Compose in detekt.yml
-
-compose:
-  active: true
-  ComposableAnnotationNaming:
-    active: true
-  ComposableNaming:
-    active: true
-  CompositionLocalAllowlist:
-    active: true
-    allowedCompositionLocals:
-      - LocalExtendedColors
-      - LocalSpacing
-  ContentEmitterReturningValues:
-    active: true
-  ModifierClickableOrder:
-    active: true
-  ModifierComposable:
-    active: true
-  ModifierMissing:
-    active: true
-  ModifierNotDefaultParam:
-    active: true
-  ModifierReused:
-    active: true
-  ModifierWithoutDefault:
-    active: true
-  MultipleEmitters:
-    active: true
-  MutableParams:
-    active: true
-  PreviewNaming:
-    active: true
-  PreviewPublic:
-    active: true
-  RememberMissing:
-    active: true
-  UnstableCollections:
-    active: true
-  ViewModelForwarding:
-    active: true
-  ViewModelInjection:
-    active: true
-```
-
-## Module Boundary Rules
+If you cannot format the entire codebase at once, use `ratchetFrom` to only enforce formatting on changed files:
 
 ```kotlin
-// build-logic/src/main/kotlin/ModuleBoundaryPlugin.kt
+spotless {
+    ratchetFrom("origin/main")
+    // ... rest of config
+}
+```
 
-class ModuleBoundaryPlugin : Plugin<Project> {
-    override fun apply(target: Project) = with(target) {
-        afterEvaluate {
-            val modulePath = path
-            
-            // Define allowed dependencies per layer
-            val allowedDependencies = when {
-                modulePath.startsWith(":features:") -> setOf(
-                    ":core:common",
-                    ":core:ui", 
-                    ":domain:models",
-                    ":domain:usecases",
-                )
-                modulePath.startsWith(":domain:usecases") -> setOf(
-                    ":core:common",
-                    ":domain:models",
-                    ":data:repositories",
-                )
-                modulePath.startsWith(":domain:models") -> setOf(
-                    ":core:common",
-                )
-                modulePath.startsWith(":data:") -> setOf(
-                    ":core:common",
-                    ":core:network",
-                    ":core:database",
-                    ":domain:models",
-                )
-                else -> null
+This means only files modified since `origin/main` must pass formatting. Over time, more of the codebase becomes formatted.
+
+### Usage
+
+```bash
+# Check formatting (CI)
+./gradlew spotlessCheck
+
+# Auto-fix formatting (local)
+./gradlew spotlessApply
+```
+
+## Android Lint in KMP
+
+Android Lint can run on KMP modules that have Android targets. It catches Android-specific issues (missing permissions, deprecated API usage, accessibility problems).
+
+### Configuration
+
+```kotlin
+android {
+    lint {
+        warningsAsErrors = true
+        abortOnError = true
+        baseline = file("lint-baseline.xml")
+        disable += setOf("ObsoleteLintCustomCheck")
+        enable += setOf("Interoperability")
+    }
+}
+```
+
+### Custom Lint Checks for KMP
+
+For KMP-specific lint rules (e.g., ensuring `expect`/`actual` declarations follow conventions), create a custom lint check module:
+
+```kotlin
+// lint-checks/build.gradle.kts
+plugins {
+    id("java-library")
+    id("kotlin")
+}
+
+dependencies {
+    compileOnly("com.android.tools.lint:lint-api:31.7.3")
+    compileOnly("com.android.tools.lint:lint-checks:31.7.3")
+}
+```
+
+## Binary Compatibility Validator
+
+### What It Does
+
+`kotlinx-binary-compatibility-validator` dumps the public API of your Kotlin modules to `.api` files. On subsequent builds, it compares the current API against the dump. If the API changed in a binary-incompatible way, the build fails.
+
+### Why It Matters for KMP
+
+KMP libraries are consumed as binary artifacts. An accidental signature change (removing a parameter default, changing a return type) breaks downstream consumers silently. The validator catches this at build time.
+
+### Gradle Setup
+
+```kotlin
+plugins {
+    id("org.jetbrains.kotlinx.binary-compatibility-validator") version "0.17.0"
+}
+
+apiValidation {
+    ignoredClasses.add("com.example.internal.InternalClass")
+    ignoredPackages.add("com.example.internal")
+    nonPublicMarkers.add("com.example.InternalApi")
+}
+```
+
+### Workflow
+
+```bash
+# Dump current API (after intentional changes)
+./gradlew apiDump
+
+# Check API compatibility (CI)
+./gradlew apiCheck
+```
+
+**Rule**: `apiDump` must be a conscious, reviewed action. Never auto-dump in CI. The `.api` files must be committed and reviewed in PRs.
+
+## Code Coverage with Kover
+
+### What It Does
+
+Kover is JetBrains' official code coverage tool for Kotlin. It supports KMP projects and generates coverage reports for `jvm` and `android` targets.
+
+### Gradle Setup
+
+```kotlin
+plugins {
+    id("org.jetbrains.kotlinx.kover") version "0.9.1"
+}
+
+kover {
+    reports {
+        filters {
+            excludes {
+                classes("*.di.*", "*.BuildConfig", "*_Factory")
+                annotatedBy("Generated")
             }
-            
-            allowedDependencies?.let { allowed ->
-                configurations.all {
-                    resolutionStrategy.eachDependency {
-                        if (requested.group == rootProject.name) {
-                            val depPath = ":${requested.name}"
-                            if (depPath !in allowed && !depPath.startsWith(modulePath)) {
-                                throw GradleException(
-                                    "Module $modulePath cannot depend on $depPath. " +
-                                    "Allowed: $allowed"
-                                )
-                            }
-                        }
-                    }
-                }
+        }
+        verify {
+            rule {
+                minBound(80) // Enforce 80% minimum coverage
             }
         }
     }
 }
 ```
 
-## Gradle Quality Tasks
+### Limitation
 
-```kotlin
-// build.gradle.kts (root)
+Kover only measures coverage for JVM-based targets (JVM, Android). Native/iOS coverage requires separate instrumentation (e.g., Xcode coverage tools).
 
-// Combined quality check
-tasks.register("quality") {
-    group = "verification"
-    description = "Runs all quality checks"
-    
-    dependsOn("spotlessCheck")
-    dependsOn("detekt")
-    dependsOn(subprojects.mapNotNull { it.tasks.findByName("lint") })
-}
+## Quality Gates in CI
 
-// Auto-fix task
-tasks.register("qualityFix") {
-    group = "verification"
-    description = "Fixes auto-fixable quality issues"
-    
-    dependsOn("spotlessApply")
-}
+### Gate Strategy
 
-// Pre-commit hook installer
-tasks.register("installGitHooks") {
-    group = "setup"
-    description = "Installs git hooks"
-    
-    doLast {
-        val hooksDir = file(".git/hooks")
-        val preCommit = file("$hooksDir/pre-commit")
-        
-        preCommit.writeText("""
-            #!/bin/bash
-            echo "Running quality checks..."
-            ./gradlew spotlessCheck detekt --daemon
-            
-            if [ $? -ne 0 ]; then
-                echo "Quality checks failed. Run './gradlew qualityFix' to auto-fix."
-                exit 1
-            fi
-        """.trimIndent())
-        
-        preCommit.setExecutable(true)
-        println("Git hooks installed!")
-    }
-}
+Quality gates should be layered and fail fast:
+
+| Gate | Tool | Blocks PR | Speed |
+|------|------|-----------|-------|
+| 1. Formatting | `spotlessCheck` | Yes | Fast (~10s) |
+| 2. Static Analysis | `detekt` | Yes | Medium (~30s) |
+| 3. API Compatibility | `apiCheck` | Yes | Fast (~5s) |
+| 4. Unit Tests | `allTests` | Yes | Medium (~60s) |
+| 5. Coverage | `koverVerify` | Yes | Medium (~60s) |
+| 6. Android Lint | `lint` | Yes (warnings as errors) | Slow (~90s) |
+
+### CI Command
+
+```bash
+./gradlew spotlessCheck detekt apiCheck allTests koverVerify --continue
 ```
 
-## CI Integration
+The `--continue` flag runs all checks even if one fails, so developers see all issues in one pass.
 
-```yaml
-# .github/workflows/quality.yml
-name: Quality
+## Best Practices
 
-on:
-  pull_request:
-  push:
-    branches: [main]
+1. **Gradual Adoption with Baselines**: Use Detekt baselines and Spotless `ratchetFrom` to adopt quality tools on existing codebases without a massive reformatting PR.
 
-jobs:
-  quality:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      
-      - name: Setup JDK
-        uses: actions/setup-java@v4
-        with:
-          java-version: '17'
-          distribution: 'temurin'
-      
-      - name: Check formatting
-        run: ./gradlew spotlessCheck
-      
-      - name: Run Detekt
-        run: ./gradlew detekt
-      
-      - name: Upload Detekt report
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: detekt-report
-          path: '**/build/reports/detekt/'
-```
+2. **Pre-commit Hooks**: Run `spotlessApply` and `detekt` before commits to catch issues locally. Use a Git hook or a tool like `lefthook`.
 
-## References
+3. **Fail on New Violations Only**: Configure baselines so CI blocks new violations while allowing tracked legacy issues to be fixed incrementally.
 
-- Detekt: https://detekt.dev/
-- Detekt Rules: https://detekt.dev/docs/rules/
-- ktlint: https://pinterest.github.io/ktlint/
-- Spotless: https://github.com/diffplug/spotless
-- Compose Rules: https://mrmans0n.github.io/compose-rules/
+4. **Review .api File Changes**: Treat `.api` file diffs like you treat database migration diffs -- every change is intentional and reviewed.
+
+5. **Separate Formatting from Logic PRs**: If you need to reformat a large section of code, do it in a dedicated PR. Mixing formatting with logic changes makes review impossible.
+
+6. **SARIF Reports for GitHub**: Configure Detekt to output SARIF format and upload to GitHub Code Scanning for inline annotations on PRs.
+
+## Common Pitfalls
+
+1. **Suppressing Without Tracking**: Using `@Suppress("detekt:RuleName")` without a comment explaining why. Always document suppressions.
+
+2. **Not Updating Baselines**: The baseline grows stale if violations are fixed but the baseline is not regenerated. Periodically regenerate and shrink the baseline.
+
+3. **Spotless + Java 11**: Spotless 8.x silently fails or throws cryptic errors on Java 11. Always verify `java -version` in CI.
+
+4. **Auto-dumping .api Files**: Running `apiDump` in CI or in a pre-commit hook defeats the purpose of the validator. The dump must be a deliberate, reviewed action.
+
+5. **Ignoring KMP Source Sets**: Detekt and Spotless must target all source sets (`commonMain`, `androidMain`, `iosMain`, etc.), not just `src/main`. Use `target("**/*.kt")` patterns carefully.
+
+6. **Coverage Threshold Too High Too Early**: Starting with 90% coverage on a new project creates pressure to write low-value tests. Start at 60-70% and increase as the codebase matures.
+
+7. **Detekt Without Type Resolution**: Running Detekt without type resolution misses cross-file issues. Enable it for CI even if it is slower.

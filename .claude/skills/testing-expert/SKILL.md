@@ -1,1379 +1,338 @@
 ---
 name: testing-expert
-description: Elite KMP testing expertise covering unit tests, presenter testing with Turbine, screenshot tests with Compose Preview Screenshot Testing/Roborazzi/Paparazzi, repository tests, and test architecture. Use when writing tests, designing test strategies, setting up test infrastructure, or debugging test failures. Triggers on test creation, test patterns, fake implementations, or test infrastructure questions.
+description: Enterprise KMP testing expertise covering unit tests, integration tests, Compose UI tests, screenshot tests, and test architecture. Use for writing tests, configuring test infrastructure, or designing test strategies for Circuit/Metro/Store5/Ktor/SQLDelight projects.
 ---
 
 # Testing Expert Skill
 
-## Testing Philosophy
+## Overview
 
-1. **Test behavior, not implementation** - Focus on what, not how
-2. **Arrange-Act-Assert** - Clear test structure
-3. **No mocking libraries** - Use test doubles that mirror production interfaces (inspired by Now in Android)
-4. **Fast and deterministic** - No flaky tests
-5. **Test pyramid** - Many unit tests, fewer integration tests
+Testing in Kotlin Multiplatform follows a layered strategy: business logic lives in `commonTest` where it runs on all targets, platform-specific behavior is verified in `androidTest`/`iosTest`/`jvmTest`, and UI is validated through Compose test rules and screenshot comparison. The test pyramid applies: many fast unit tests, fewer integration tests, and targeted UI/screenshot tests.
 
-## Why No Mocking?
+## When to use
 
-Following the Now in Android approach, avoid mocking libraries like MockK/Mockito:
-- Test doubles that implement real interfaces are more maintainable
-- They catch breaking changes at compile time
-- They make tests more readable and behavior-focused
-- Use real components where feasible (e.g., actual DataStore with temp storage)
+- **Presenter Tests**: Verifying Circuit Presenter logic with Turbine and Molecule.
+- **Repository Tests**: Testing Store5-backed repositories with fake network and database layers.
+- **Flow Tests**: Asserting emission sequences, error propagation, and completion with Turbine.
+- **Compose UI Tests**: Validating rendering, interaction, and accessibility via `ComposeTestRule`.
+- **Screenshot Tests**: Pixel-level regression with Roborazzi or Paparazzi.
+- **Integration Tests**: End-to-end data flow from Fetcher through SourceOfTruth to Presenter state.
+- **Test Infrastructure**: Setting up dispatchers, test rules, and shared test utilities.
+
+## Quick Reference
+
+For API details and configuration, see [reference.md](reference.md).
+For complete code examples, see [examples.md](examples.md).
+
+## Philosophy
+
+### 1. Behavior over Implementation
+
+Test what the code **does**, not how it does it. A Presenter test should assert that a state changes in response to an event, not that a specific internal method was called. This makes tests resilient to refactoring.
+
+```kotlin
+// GOOD: Tests the behavior
+@Test
+fun `adding item updates the list`() = runTest {
+    val presenter = createPresenter()
+    presenter.test {
+        val initial = awaitItem()
+        initial.eventSink(Event.AddItem("Milk"))
+        val updated = awaitItem()
+        assertEquals(listOf("Milk"), updated.items)
+    }
+}
+
+// BAD: Tests the implementation
+@Test
+fun `adding item calls repository insert`() = runTest {
+    // This couples the test to the implementation detail
+    verify(mockRepository).insert("Milk") // No mocking libraries!
+}
+```
+
+### 2. Fakes over Mocks
+
+KMP has no reliable cross-platform mocking library. This is a feature, not a limitation. Hand-written fakes produce better tests because they force you to define explicit contracts and make test behavior deterministic.
+
+```kotlin
+// Fake with controllable behavior
+class FakeProductRepository : ProductRepository {
+    var products = mutableListOf<Product>()
+    var shouldFail = false
+
+    override fun getProducts(): Flow<List<Product>> = flow {
+        if (shouldFail) throw IOException("Network error")
+        emit(products)
+    }
+}
+```
+
+### 3. commonTest First
+
+All business logic tests belong in `commonTest`. They run on every target (JVM, iOS, JS/WASM) and execute fastest. Only move tests to platform source sets when they genuinely require platform APIs (Android Context, iOS NSUserDefaults, etc.).
+
+| Source Set | What to Test | Examples |
+|------------|--------------|---------|
+| `commonTest` | All business logic, Presenters, Repositories, Flows, mappers, validators | 90%+ of tests |
+| `androidTest` | Android-specific integrations | Room DAOs, WorkManager, Baseline Profiles |
+| `iosTest` | iOS-specific integrations | CoreData, Keychain wrappers |
+| `jvmTest` | JVM-specific utilities | File I/O, JVM threading |
 
 ## Dependencies
 
 ```kotlin
-// build.gradle.kts
-commonTest.dependencies {
-    implementation(kotlin("test"))
-    implementation("org.jetbrains.kotlinx:kotlinx-coroutines-test:1.10.2")
-    implementation("app.cash.turbine:turbine:1.2.0")
-    implementation("io.kotest:kotest-assertions-core:5.9.1")
-    implementation("com.slack.circuit:circuit-test:0.31.0")
-}
-
-androidUnitTest.dependencies {
-    // Roborazzi (preferred for JVM screenshot tests)
-    implementation("io.github.takahirom.roborazzi:roborazzi:1.51.0")
-    implementation("io.github.takahirom.roborazzi:roborazzi-compose:1.51.0")
-
-    // Paparazzi (alternative screenshot testing)
-    implementation("app.cash.paparazzi:paparazzi:1.3.5")
-
-    implementation("org.robolectric:robolectric:4.16")
-}
-```
-
-## Circuit Presenter Testing
-
-### Using presenterTestOf (Recommended)
-
-The simplest way to test presenters using Circuit's built-in testing utilities:
-
-```kotlin
-class ProfilePresenterTest {
-
-    @Test
-    fun `initial state is loading`() = runTest {
-        presenterTestOf(
-            presentFunction = {
-                profilePresenter(
-                    screen = ProfileScreen(userId = "123"),
-                    navigator = FakeNavigator(ProfileScreen(userId = "123")),
-                    userRepository = FakeUserRepository(),
-                )
-            },
-        ) {
-            assertThat(awaitItem()).isInstanceOf<ProfileScreen.State.Loading>()
+// In your shared module's build.gradle.kts
+kotlin {
+    sourceSets {
+        commonTest.dependencies {
+            implementation(kotlin("test"))
+            implementation(libs.kotlinx.coroutines.test) // 1.10.2
+            implementation(libs.turbine)                   // 1.2.1
         }
-    }
-
-    @Test
-    fun `successful load shows user profile`() = runTest {
-        val fakeRepository = FakeUserRepository().apply {
-            emitUser(testUser)
-        }
-
-        presenterTestOf(
-            presentFunction = {
-                profilePresenter(
-                    screen = ProfileScreen(userId = "123"),
-                    navigator = FakeNavigator(ProfileScreen(userId = "123")),
-                    userRepository = fakeRepository,
-                )
-            },
-        ) {
-            assertThat(awaitItem()).isInstanceOf<ProfileScreen.State.Loading>()
-
-            val successState = awaitItem() as ProfileScreen.State.Success
-            assertThat(successState.user.name).isEqualTo(testUser.name)
-        }
-    }
-
-    @Test
-    fun `navigation events are captured`() = runTest {
-        val navigator = FakeNavigator(ProfileScreen(userId = "123"))
-        val fakeRepository = FakeUserRepository().apply {
-            emitUser(testUser)
-        }
-
-        presenterTestOf(
-            presentFunction = {
-                profilePresenter(
-                    screen = ProfileScreen(userId = "123"),
-                    navigator = navigator,
-                    userRepository = fakeRepository,
-                )
-            },
-        ) {
-            skipItems(1) // Skip loading
-
-            val state = awaitItem() as ProfileScreen.State.Success
-            state.eventSink(ProfileScreen.Event.BackClick)
-
-            // Assert navigation happened
-            assertThat(navigator.awaitPop()).isNotNull()
+        androidUnitTest.dependencies {
+            implementation(libs.roborazzi)
+            implementation(libs.roborazzi.compose)
+            implementation(libs.roborazzi.rule)
+            implementation(libs.compose.ui.test.junit4)
+            implementation(libs.compose.ui.test.manifest)
         }
     }
 }
 ```
 
-### Alternative: Manual Presenter Test
+Version catalog entries (`libs.versions.toml`):
 
-```kotlin
-class ProfilePresenterTest {
+```toml
+[versions]
+kotlinx-coroutines = "1.10.2"
+turbine = "1.2.1"
+roborazzi = "1.35.0"
 
-    @Test
-    fun `initial state is loading`() = runTest {
-        val presenter = createPresenter()
-
-        presenter.test {
-            val state = awaitItem()
-            assertThat(state).isInstanceOf<ProfileScreen.State.Loading>()
-        }
-    }
-    
-    @Test
-    fun `successful load shows user profile`() = runTest {
-        val fakeRepository = FakeUserRepository()
-        val presenter = createPresenter(userRepository = fakeRepository)
-        
-        presenter.test {
-            // Initial loading
-            assertThat(awaitItem()).isInstanceOf<ProfileScreen.State.Loading>()
-            
-            // Emit user from repository
-            fakeRepository.emitUser(testUser)
-            
-            // Verify success state
-            val successState = awaitItem() as ProfileScreen.State.Success
-            assertThat(successState.user.name).isEqualTo(testUser.name)
-            assertThat(successState.user.email).isEqualTo(testUser.email)
-        }
-    }
-    
-    @Test
-    fun `error state shows retry option`() = runTest {
-        val fakeRepository = FakeUserRepository()
-        val presenter = createPresenter(userRepository = fakeRepository)
-        
-        presenter.test {
-            skipItems(1) // Skip loading
-            
-            fakeRepository.emitError(DomainError.Network.NoConnection)
-            
-            val errorState = awaitItem() as ProfileScreen.State.Error
-            assertThat(errorState.message).contains("connection")
-            assertThat(errorState.canRetry).isTrue()
-        }
-    }
-    
-    @Test
-    fun `refresh event triggers repository refresh`() = runTest {
-        val fakeRepository = FakeUserRepository()
-        val presenter = createPresenter(userRepository = fakeRepository)
-        
-        presenter.test {
-            skipItems(1) // Skip loading
-            fakeRepository.emitUser(testUser)
-            
-            val state = awaitItem() as ProfileScreen.State.Success
-            
-            // Trigger refresh
-            state.eventSink(ProfileScreen.Event.Refresh)
-            
-            // Verify refresh was called
-            assertThat(fakeRepository.refreshCallCount).isEqualTo(1)
-        }
-    }
-    
-    @Test
-    fun `back navigation pops screen`() = runTest {
-        val navigator = FakeNavigator(ProfileScreen(userId = "123"))
-        val fakeRepository = FakeUserRepository()
-        val presenter = createPresenter(
-            navigator = navigator,
-            userRepository = fakeRepository,
-        )
-        
-        presenter.test {
-            skipItems(1)
-            fakeRepository.emitUser(testUser)
-            
-            val state = awaitItem() as ProfileScreen.State.Success
-            state.eventSink(ProfileScreen.Event.BackClick)
-            
-            // Verify navigation
-            assertThat(navigator.awaitPop()).isNotNull()
-        }
-    }
-    
-    private fun createPresenter(
-        screen: ProfileScreen = ProfileScreen(userId = "123"),
-        navigator: Navigator = FakeNavigator(screen),
-        userRepository: UserRepository = FakeUserRepository(),
-    ): Presenter<ProfileScreen.State> {
-        return Presenter { 
-            ProfilePresenter(
-                screen = screen,
-                navigator = navigator,
-                userRepository = userRepository,
-            )
-        }
-    }
-    
-    companion object {
-        val testUser = User(
-            id = "123",
-            name = "Test User",
-            email = "test@example.com",
-            avatarUrl = null,
-            createdAt = Clock.System.now(),
-        )
-    }
-}
+[libraries]
+kotlinx-coroutines-test = { module = "org.jetbrains.kotlinx:kotlinx-coroutines-test", version.ref = "kotlinx-coroutines" }
+turbine = { module = "app.cash.turbine:turbine", version.ref = "turbine" }
+roborazzi = { module = "io.github.takahirom.roborazzi:roborazzi", version.ref = "roborazzi" }
+roborazzi-compose = { module = "io.github.takahirom.roborazzi:roborazzi-compose", version.ref = "roborazzi" }
+roborazzi-rule = { module = "io.github.takahirom.roborazzi:roborazzi-junit-rule", version.ref = "roborazzi" }
 ```
 
-### Testing State Transitions
+## Test Types
+
+### Presenter Tests (Circuit)
+
+Circuit Presenters are `@Composable` functions. Test them with Molecule's `moleculeFlow` or Circuit's built-in `Presenter.test {}` extension. The Presenter returns a `State` and accepts `Event`s via the `eventSink`.
 
 ```kotlin
 @Test
-fun `loading to success to refreshing flow`() = runTest {
-    val fakeRepository = FakeUserRepository()
-    val presenter = createPresenter(userRepository = fakeRepository)
-    
+fun `loading products shows loading then content`() = runTest {
+    val fakeRepo = FakeProductRepository()
+    fakeRepo.products = listOf(Product("1", "Widget"))
+
+    val presenter = ProductListPresenter(fakeRepo)
     presenter.test {
-        // 1. Initial loading
-        assertThat(awaitItem()).isInstanceOf<State.Loading>()
-        
-        // 2. Data loaded
-        fakeRepository.emitUser(testUser)
-        val success1 = awaitItem() as State.Success
-        assertThat(success1.isRefreshing).isFalse()
-        
-        // 3. Trigger refresh
-        success1.eventSink(Event.Refresh)
-        
-        // 4. Refreshing state
-        val refreshing = awaitItem() as State.Success
-        assertThat(refreshing.isRefreshing).isTrue()
-        
-        // 5. Refresh complete
-        fakeRepository.emitUser(updatedUser)
-        val success2 = awaitItem() as State.Success
-        assertThat(success2.isRefreshing).isFalse()
-        assertThat(success2.user).isEqualTo(updatedUser)
+        val loading = awaitItem()
+        assertTrue(loading.isLoading)
+
+        val content = awaitItem()
+        assertFalse(content.isLoading)
+        assertEquals(1, content.products.size)
     }
 }
 ```
 
-## Fake Implementations
+### Repository Tests
 
-### Fake Repository
-
-```kotlin
-class FakeUserRepository : UserRepository {
-    
-    private val userFlow = MutableSharedFlow<Either<DomainError, User>>(replay = 1)
-    private val usersFlow = MutableSharedFlow<Either<DomainError, List<User>>>(replay = 1)
-    
-    var refreshCallCount = 0
-        private set
-    
-    var lastUpdatedUser: User? = null
-        private set
-    
-    // Emit methods for tests
-    suspend fun emitUser(user: User) {
-        userFlow.emit(user.right())
-    }
-    
-    suspend fun emitError(error: DomainError) {
-        userFlow.emit(error.left())
-    }
-    
-    suspend fun emitUsers(users: List<User>) {
-        usersFlow.emit(users.right())
-    }
-    
-    // Repository implementation
-    override fun observeUser(id: String): Flow<Either<DomainError, User>> = userFlow
-    
-    override fun observeUsers(): Flow<Either<DomainError, List<User>>> = usersFlow
-    
-    override suspend fun refreshUser(id: String): Either<DomainError, User> {
-        refreshCallCount++
-        return userFlow.first()
-    }
-    
-    override suspend fun updateUser(user: User): Either<DomainError, Unit> {
-        lastUpdatedUser = user
-        return Unit.right()
-    }
-    
-    fun reset() {
-        refreshCallCount = 0
-        lastUpdatedUser = null
-    }
-}
-```
-
-### Fake Navigator (Circuit)
-
-```kotlin
-class FakeNavigator(
-    initialScreen: Screen,
-) : Navigator {
-    
-    private val backStack = mutableListOf<Screen>(initialScreen)
-    private val goToChannel = Channel<Screen>(Channel.UNLIMITED)
-    private val popChannel = Channel<PopResult?>(Channel.UNLIMITED)
-    private val resetRootChannel = Channel<Screen>(Channel.UNLIMITED)
-    
-    override val onRootPop: () -> Unit = {}
-    
-    override fun goTo(screen: Screen) {
-        backStack.add(screen)
-        goToChannel.trySend(screen)
-    }
-    
-    override fun pop(result: PopResult?): Screen? {
-        popChannel.trySend(result)
-        return if (backStack.size > 1) {
-            backStack.removeLast()
-        } else null
-    }
-    
-    override fun resetRoot(
-        newRoot: Screen,
-        saveState: Boolean,
-        restoreState: Boolean,
-    ): List<Screen> {
-        resetRootChannel.trySend(newRoot)
-        val old = backStack.toList()
-        backStack.clear()
-        backStack.add(newRoot)
-        return old
-    }
-    
-    override fun peek(): Screen? = backStack.lastOrNull()
-    
-    override fun peekBackStack(): ImmutableList<Screen> = backStack.toImmutableList()
-    
-    // Assertion helpers
-    suspend fun awaitGoTo(): Screen = goToChannel.receive()
-    
-    suspend fun awaitPop(): PopResult? = popChannel.receive()
-    
-    suspend fun awaitResetRoot(): Screen = resetRootChannel.receive()
-    
-    fun expectNoEvents() {
-        assertThat(goToChannel.tryReceive().isSuccess).isFalse()
-        assertThat(popChannel.tryReceive().isSuccess).isFalse()
-    }
-}
-```
-
-### Fake API
-
-```kotlin
-class FakeUserApi : UserApi {
-    
-    private var userResponse: Either<NetworkError, UserResponse>? = null
-    private var usersResponse: Either<NetworkError, List<UserResponse>>? = null
-    
-    var createUserCallCount = 0
-        private set
-    var lastCreateRequest: CreateUserRequest? = null
-        private set
-    
-    fun setUserResponse(response: Either<NetworkError, UserResponse>) {
-        userResponse = response
-    }
-    
-    fun setUsersResponse(response: Either<NetworkError, List<UserResponse>>) {
-        usersResponse = response
-    }
-    
-    fun setError(error: NetworkError) {
-        userResponse = error.left()
-        usersResponse = error.left()
-    }
-    
-    override suspend fun getUser(id: String): Either<NetworkError, UserResponse> =
-        userResponse ?: NetworkError.Unknown(Exception("Not configured")).left()
-    
-    override suspend fun getUsers(
-        page: Int,
-        size: Int,
-    ): Either<NetworkError, PaginatedResponse<UserResponse>> =
-        usersResponse?.map { users ->
-            PaginatedResponse(
-                data = users,
-                page = page,
-                pageSize = size,
-                totalCount = users.size,
-                hasMore = false,
-            )
-        } ?: NetworkError.Unknown(Exception("Not configured")).left()
-    
-    override suspend fun createUser(
-        request: CreateUserRequest,
-    ): Either<NetworkError, UserResponse> {
-        createUserCallCount++
-        lastCreateRequest = request
-        return userResponse ?: NetworkError.Unknown(Exception("Not configured")).left()
-    }
-    
-    fun reset() {
-        userResponse = null
-        usersResponse = null
-        createUserCallCount = 0
-        lastCreateRequest = null
-    }
-}
-```
-
-## Flow Testing with Turbine
-
-### Basic Flow Test
+Test repositories by substituting real network and database layers with fakes. Verify the data transformation pipeline without touching real I/O.
 
 ```kotlin
 @Test
-fun `repository emits cached then fresh data`() = runTest {
-    val repository = UserRepositoryImpl(fakeApi, testDatabase)
-    
-    // Seed database
-    testDatabase.userQueries.upsert(cachedUser.toEntity())
-    fakeApi.setUserResponse(freshUser.right())
-    
-    repository.observeUser("123").test {
-        // First emission: cached data
+fun `repository returns cached data then refreshes`() = runTest {
+    val fakeApi = FakeProductApi()
+    val fakeDb = FakeProductDao()
+    fakeDb.insertProduct(Product("1", "Cached"))
+    fakeApi.response = Product("1", "Fresh")
+
+    val repository = ProductRepositoryImpl(fakeApi, fakeDb)
+    repository.getProduct("1", refresh = true).test {
         val cached = awaitItem()
-        assertThat(cached.isRight()).isTrue()
-        assertThat(cached.getOrNull()?.name).isEqualTo(cachedUser.name)
-        
-        // Second emission: fresh data
+        assertEquals("Cached", cached.name)
+
         val fresh = awaitItem()
-        assertThat(fresh.isRight()).isTrue()
-        assertThat(fresh.getOrNull()?.name).isEqualTo(freshUser.name)
-        
-        // No more emissions expected
+        assertEquals("Fresh", fresh.name)
+
         cancelAndIgnoreRemainingEvents()
     }
 }
 ```
 
-### Testing Flow Transformations
+### Flow Tests (Turbine)
+
+Turbine provides structured assertions for Flow emissions. Always use `.test {}` to ensure proper cancellation and avoid hanging tests.
 
 ```kotlin
 @Test
-fun `combined flow emits when any source changes`() = runTest {
-    val userFlow = MutableSharedFlow<User>()
-    val prefsFlow = MutableSharedFlow<Preferences>()
-    
-    val combinedFlow = combine(userFlow, prefsFlow) { user, prefs ->
-        UserWithPrefs(user, prefs)
-    }
-    
-    combinedFlow.test {
-        // Emit both values
-        userFlow.emit(testUser)
-        prefsFlow.emit(testPrefs)
-        
-        val combined = awaitItem()
-        assertThat(combined.user).isEqualTo(testUser)
-        assertThat(combined.prefs).isEqualTo(testPrefs)
-        
-        // Update user only
-        userFlow.emit(updatedUser)
-        
-        val updated = awaitItem()
-        assertThat(updated.user).isEqualTo(updatedUser)
-        assertThat(updated.prefs).isEqualTo(testPrefs) // Unchanged
+fun `search debounces input`() = runTest {
+    val searchFlow = MutableSharedFlow<String>()
+    val results = searchFlow
+        .debounce(300)
+        .mapLatest { query -> searchApi.search(query) }
+
+    results.test {
+        searchFlow.emit("K")
+        searchFlow.emit("Ko")
+        searchFlow.emit("Kot")
+        advanceTimeBy(350)
+        assertEquals(searchApi.resultsFor("Kot"), awaitItem())
     }
 }
 ```
 
-### Testing Error Scenarios
+### Compose UI Tests
+
+Use `ComposeTestRule` (Android) to assert layout, interactions, and accessibility.
 
 ```kotlin
+@get:Rule
+val composeTestRule = createComposeRule()
+
 @Test
-fun `flow emits error and recovers`() = runTest {
-    val repository = FakeUserRepository()
-    
-    repository.observeUser("123").test {
-        // Success
-        repository.emitUser(testUser)
-        assertThat(awaitItem().isRight()).isTrue()
-        
-        // Error
-        repository.emitError(DomainError.Network.NoConnection)
-        assertThat(awaitItem().isLeft()).isTrue()
-        
-        // Recovery
-        repository.emitUser(testUser)
-        assertThat(awaitItem().isRight()).isTrue()
-    }
-}
-```
-
-## Use Case Testing
-
-```kotlin
-class GetUserProfileUseCaseTest {
-    
-    private lateinit var userRepository: FakeUserRepository
-    private lateinit var prefsRepository: FakePreferencesRepository
-    private lateinit var useCase: GetUserProfileUseCase
-    
-    @BeforeTest
-    fun setup() {
-        userRepository = FakeUserRepository()
-        prefsRepository = FakePreferencesRepository()
-        useCase = GetUserProfileUseCase(userRepository, prefsRepository)
-    }
-    
-    @Test
-    fun `returns profile when both repositories succeed`() = runTest {
-        userRepository.setUser(testUser)
-        prefsRepository.setPreferences(testPrefs)
-        
-        val result = useCase("123")
-        
-        assertThat(result.isRight()).isTrue()
-        val profile = result.getOrNull()!!
-        assertThat(profile.user).isEqualTo(testUser)
-        assertThat(profile.preferences).isEqualTo(testPrefs)
-    }
-    
-    @Test
-    fun `returns error when user not found`() = runTest {
-        userRepository.setError(DomainError.Business.UserNotFound)
-        prefsRepository.setPreferences(testPrefs)
-        
-        val result = useCase("unknown")
-        
-        assertThat(result.isLeft()).isTrue()
-        assertThat(result.leftOrNull()).isEqualTo(DomainError.Business.UserNotFound)
-    }
-    
-    @Test
-    fun `short-circuits on first error`() = runTest {
-        userRepository.setError(DomainError.Network.NoConnection)
-        // Don't configure prefs - should not be called
-        
-        val result = useCase("123")
-        
-        assertThat(result.isLeft()).isTrue()
-        assertThat(prefsRepository.getPreferencesCallCount).isEqualTo(0)
-    }
-}
-```
-
-## Screenshot Testing Options
-
-This project supports three screenshot testing approaches:
-
-| Tool | Type | Best For |
-|------|------|----------|
-| **Compose Preview Screenshot Testing** | Official Google tool | Simple preview-based tests, teams new to screenshot testing |
-| **Roborazzi** | JVM/Robolectric | Advanced control, parameterized tests, CI consistency |
-| **Paparazzi** | JVM layoutlib | Fast iteration, no Robolectric dependency |
-
----
-
-## Compose Preview Screenshot Testing (Official Google Tool)
-
-Google's official screenshot testing tool that converts `@Preview` composables into automated tests. Ideal for leveraging existing previews.
-
-### Requirements
-- AGP 8.5.0+
-- Kotlin 1.9.20+ (2.0+ recommended)
-- JDK 23 or lower
-
-### Setup
-
-**1. Enable in `gradle.properties`:**
-```properties
-android.experimental.enableScreenshotTest=true
-```
-
-**2. Add to version catalog (`libs.versions.toml`):**
-```toml
-[versions]
-screenshot = "0.0.1-alpha12"
-
-[plugins]
-screenshot = { id = "com.android.compose.screenshot", version.ref = "screenshot" }
-
-[libraries]
-screenshot-validation-api = { group = "com.android.tools.screenshot", name = "screenshot-validation-api", version.ref = "screenshot" }
-```
-
-**3. Configure module `build.gradle.kts`:**
-```kotlin
-plugins {
-    alias(libs.plugins.screenshot)
-}
-
-android {
-    experimentalProperties["android.experimental.enableScreenshotTest"] = true
-
-    testOptions {
-        screenshotTests {
-            imageDifferenceThreshold = 0.0001f // 0.01% tolerance
-        }
-    }
-}
-
-dependencies {
-    screenshotTestImplementation(libs.screenshot.validation.api)
-    screenshotTestImplementation(libs.androidx.ui.tooling)
-}
-```
-
-### Writing Screenshot Tests
-
-Create test files in `src/screenshotTest/kotlin/`:
-
-```kotlin
-package com.example.app
-
-import androidx.compose.runtime.Composable
-import androidx.compose.ui.tooling.preview.Preview
-import com.android.tools.screenshot.PreviewTest
-import com.example.app.ui.theme.AppTheme
-
-// Basic screenshot test
-@PreviewTest
-@Preview(showBackground = true)
-@Composable
-fun ProfileCardPreview() {
-    AppTheme {
-        ProfileCard(
-            user = PreviewData.user,
-            onClick = {},
-        )
-    }
-}
-
-// Multiple configurations with multi-preview
-@PreviewTest
-@Preview(name = "Light", showBackground = true)
-@Preview(name = "Dark", uiMode = android.content.res.Configuration.UI_MODE_NIGHT_YES)
-@Composable
-fun ProfileCardThemeVariants() {
-    AppTheme {
-        ProfileCard(user = PreviewData.user, onClick = {})
-    }
-}
-
-// Font scale variants
-@PreviewTest
-@Preview(name = "Normal", fontScale = 1.0f)
-@Preview(name = "Large", fontScale = 1.5f)
-@Preview(name = "Small", fontScale = 0.85f)
-@Composable
-fun ProfileCardFontScales() {
-    AppTheme {
-        ProfileCard(user = PreviewData.user, onClick = {})
-    }
-}
-
-// Different states
-@PreviewTest
-@Preview(showBackground = true)
-@Composable
-fun ProfileScreenLoadingPreview() {
-    AppTheme {
-        ProfileUi(state = ProfileScreen.State.Loading)
-    }
-}
-
-@PreviewTest
-@Preview(showBackground = true)
-@Composable
-fun ProfileScreenSuccessPreview() {
-    AppTheme {
-        ProfileUi(
-            state = ProfileScreen.State.Success(
-                user = PreviewData.user,
-                isRefreshing = false,
-                eventSink = {},
-            ),
-        )
-    }
-}
-
-@PreviewTest
-@Preview(showBackground = true)
-@Composable
-fun ProfileScreenErrorPreview() {
-    AppTheme {
-        ProfileUi(
-            state = ProfileScreen.State.Error(
-                message = "Unable to load profile",
-                canRetry = true,
-                eventSink = {},
-            ),
-        )
-    }
-}
-```
-
-### Using Built-in Multi-Preview Annotations
-
-Leverage standard multi-preview annotations for comprehensive coverage:
-
-```kotlin
-import androidx.compose.ui.tooling.preview.PreviewScreenSizes
-import androidx.compose.ui.tooling.preview.PreviewFontScale
-import androidx.compose.ui.tooling.preview.PreviewLightDark
-import androidx.compose.ui.tooling.preview.PreviewDynamicColors
-
-// Custom combined annotation
-@PreviewTest
-@PreviewLightDark
-@PreviewFontScale
-annotation class StandardScreenshotTests
-
-@StandardScreenshotTests
-@Composable
-fun ButtonPreview() {
-    AppTheme {
-        PrimaryButton(text = "Submit", onClick = {})
-    }
-}
-```
-
-### Gradle Commands
-
-```bash
-# Generate/update reference screenshots
-./gradlew updateDebugScreenshotTest
-./gradlew :feature:profile:updateDebugScreenshotTest
-
-# Validate against references (fails on differences)
-./gradlew validateDebugScreenshotTest
-./gradlew :feature:profile:validateDebugScreenshotTest
-```
-
-**Output locations:**
-- References: `{module}/src/screenshotTest{Variant}/reference/`
-- Reports: `{module}/build/reports/screenshotTest/preview/{variant}/index.html`
-
-### CI Best Practices
-
-```yaml
-# GitHub Actions example
-jobs:
-  screenshot-tests:
-    runs-on: ubuntu-latest  # Use consistent OS
-    steps:
-      - uses: actions/checkout@v4
-      - name: Set up JDK 21
-        uses: actions/setup-java@v4
-        with:
-          java-version: '21'
-          distribution: 'temurin'
-
-      - name: Validate screenshots
-        run: ./gradlew validateDebugScreenshotTest
-
-      - name: Upload report on failure
-        if: failure()
-        uses: actions/upload-artifact@v4
-        with:
-          name: screenshot-report
-          path: '**/build/reports/screenshotTest/'
-```
-
-**Important CI considerations:**
-- ⚠️ Different OS platforms may produce slightly different screenshots
-- Run `updateDebugScreenshotTest` **manually only** when UI intentionally changes
-- Run `validateDebugScreenshotTest` on every PR
-- Use consistent JDK and OS version in CI
-- Flag screenshot changes in PRs for reviewer attention
-
-### Directory Structure
-
-```
-module/
-├── src/
-│   ├── main/kotlin/           # Production code
-│   ├── test/kotlin/           # Unit tests
-│   └── screenshotTest/        # Screenshot tests
-│       └── kotlin/
-│           └── com/app/feature/
-│               ├── ProfileScreenshotTest.kt
-│               └── ComponentScreenshotTests.kt
-│       └── reference/         # Generated reference images (commit these)
-│           └── debug/
-│               └── com.app.feature.ProfileCardPreview_xxx.png
-```
-
-### Troubleshooting
-
-| Issue | Solution |
-|-------|----------|
-| Tests not found | Ensure `@PreviewTest` annotation is present (required since v0.0.1-alpha10) |
-| Different results on CI | Lock OS, JDK version; consider using Docker |
-| Memory issues | Configure heap size in plugin v0.0.1-alpha12+ |
-| Missing dependencies | Add both `screenshot-validation-api` and `ui-tooling` |
-
----
-
-## Screenshot Testing (Roborazzi - Recommended for Advanced Use)
-
-Roborazzi is preferred for JVM-based screenshot tests as it integrates with Robolectric:
-
-### Setup
-
-```kotlin
-// build.gradle.kts
-plugins {
-    id("io.github.takahirom.roborazzi") version "1.51.0"
-}
-
-android {
-    testOptions {
-        unitTests {
-            isIncludeAndroidResources = true
-            all { test ->
-                test.systemProperty("robolectric.graphicsMode", "NATIVE")
-            }
-        }
-    }
-}
-
-dependencies {
-    testImplementation("io.github.takahirom.roborazzi:roborazzi:1.51.0")
-    testImplementation("io.github.takahirom.roborazzi:roborazzi-compose:1.51.0")
-    testImplementation("io.github.takahirom.roborazzi:roborazzi-junit-rule:1.51.0")
-    testImplementation("org.robolectric:robolectric:4.16")
-}
-```
-
-### Basic Roborazzi Test
-
-```kotlin
-@RunWith(RobolectricTestRunner::class)
-@GraphicsMode(GraphicsMode.Mode.NATIVE)
-@Config(sdk = [33])
-class ProfileUiRoborazziTest {
-
-    @get:Rule
-    val composeTestRule = createComposeRule()
-
-    @Test
-    fun profileLoading() {
-        composeTestRule.setContent {
-            AppTheme {
-                ProfileUi(
-                    state = ProfileScreen.State.Loading,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-        }
-
-        composeTestRule.onRoot().captureRoboImage()
-    }
-
-    @Test
-    fun profileSuccess() {
-        composeTestRule.setContent {
-            AppTheme {
-                ProfileUi(
-                    state = ProfileScreen.State.Success(
-                        user = PreviewData.user,
-                        isRefreshing = false,
-                        eventSink = {},
-                    ),
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-        }
-
-        composeTestRule.onRoot().captureRoboImage()
-    }
-
-    @Test
-    fun profileError() {
-        composeTestRule.setContent {
-            AppTheme {
-                ProfileUi(
-                    state = ProfileScreen.State.Error(
-                        message = "Something went wrong",
-                        canRetry = true,
-                        eventSink = {},
-                    ),
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-        }
-
-        composeTestRule.onRoot().captureRoboImage()
-    }
-}
-```
-
-### Device and Theme Variants
-
-```kotlin
-@RunWith(ParameterizedRobolectricTestRunner::class)
-@GraphicsMode(GraphicsMode.Mode.NATIVE)
-class ProfileUiScreenshotVariantsTest(
-    private val device: RobolectricDeviceQualifiers,
-    private val darkTheme: Boolean,
-) {
-
-    companion object {
-        @JvmStatic
-        @ParameterizedRobolectricTestRunner.Parameters(name = "{0}, dark={1}")
-        fun params() = listOf(
-            arrayOf(RobolectricDeviceQualifiers.Pixel5, false),
-            arrayOf(RobolectricDeviceQualifiers.Pixel5, true),
-            arrayOf(RobolectricDeviceQualifiers.MediumTablet, false),
-            arrayOf(RobolectricDeviceQualifiers.MediumTablet, true),
+fun `product card shows name and price`() {
+    composeTestRule.setContent {
+        ProductCard(
+            state = ProductCardState(
+                name = "Widget",
+                price = "$9.99"
+            )
         )
     }
 
-    @get:Rule
-    val composeTestRule = createComposeRule()
-
-    @Test
-    @Config(qualifiers = "w411dp-h891dp") // Will be overridden by device
-    fun profileSuccess() {
-        composeTestRule.setContent {
-            AppTheme(darkTheme = darkTheme) {
-                ProfileUi(
-                    state = ProfileScreen.State.Success(
-                        user = PreviewData.user,
-                        isRefreshing = false,
-                        eventSink = {},
-                    ),
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-        }
-
-        composeTestRule.onRoot().captureRoboImage(
-            filePath = "screenshots/${device}_dark$darkTheme.png",
-        )
-    }
+    composeTestRule.onNodeWithText("Widget").assertIsDisplayed()
+    composeTestRule.onNodeWithText("$9.99").assertIsDisplayed()
 }
 ```
 
-### Gradle Commands
+### Screenshot Tests
 
-```bash
-# Record baseline screenshots
-./gradlew recordRoborazzi
-
-# Compare against baseline
-./gradlew compareRoborazzi
-
-# Verify screenshots (fails if different)
-./gradlew verifyRoborazzi
-
-# Record for specific module
-./gradlew :feature:profile:recordRoborazzi
-```
-
-## Screenshot Testing (Paparazzi)
-
-### Basic Screenshot Test
+Capture reference images and compare against future renders to catch visual regressions.
 
 ```kotlin
-class ProfileUiScreenshotTest {
-    
-    @get:Rule
-    val paparazzi = Paparazzi(
-        deviceConfig = DeviceConfig.PIXEL_5,
-        theme = "android:Theme.Material3.DayNight.NoActionBar",
-    )
-    
-    @Test
-    fun profileLoading() {
-        paparazzi.snapshot {
-            AppTheme {
-                ProfileUi(
-                    state = ProfileScreen.State.Loading,
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-        }
-    }
-    
-    @Test
-    fun profileSuccess() {
-        paparazzi.snapshot {
-            AppTheme {
-                ProfileUi(
-                    state = ProfileScreen.State.Success(
-                        user = PreviewData.user,
-                        isRefreshing = false,
-                        eventSink = {},
-                    ),
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-        }
-    }
-    
-    @Test
-    fun profileError() {
-        paparazzi.snapshot {
-            AppTheme {
-                ProfileUi(
-                    state = ProfileScreen.State.Error(
-                        message = "Something went wrong",
-                        canRetry = true,
-                        eventSink = {},
-                    ),
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-        }
-    }
-    
-    @Test
-    fun profileRefreshing() {
-        paparazzi.snapshot {
-            AppTheme {
-                ProfileUi(
-                    state = ProfileScreen.State.Success(
-                        user = PreviewData.user,
-                        isRefreshing = true,
-                        eventSink = {},
-                    ),
-                    modifier = Modifier.fillMaxSize(),
-                )
-            }
-        }
-    }
-}
-```
-
-### Device Configurations
-
-```kotlin
-class ResponsiveLayoutScreenshotTest {
-    
-    @Test
-    fun phone() {
-        Paparazzi(deviceConfig = DeviceConfig.PIXEL_5).snapshot {
-            AppTheme { ContentToTest() }
-        }
-    }
-    
-    @Test
-    fun tablet() {
-        Paparazzi(
-            deviceConfig = DeviceConfig.NEXUS_10.copy(
-                orientation = ScreenOrientation.LANDSCAPE,
-            ),
-        ).snapshot {
-            AppTheme { ContentToTest() }
-        }
-    }
-    
-    @Test
-    fun foldable() {
-        Paparazzi(
-            deviceConfig = DeviceConfig.PIXEL_FOLD,
-        ).snapshot {
-            AppTheme { ContentToTest() }
-        }
-    }
-}
-```
-
-### Dark Mode Testing
-
-```kotlin
-class DarkModeScreenshotTest {
-    
-    @get:Rule
-    val paparazzi = Paparazzi(deviceConfig = DeviceConfig.PIXEL_5)
-    
-    @Test
-    fun lightMode() {
-        paparazzi.snapshot {
-            AppTheme(darkTheme = false) {
-                ProfileUi(state = successState)
-            }
-        }
-    }
-    
-    @Test
-    fun darkMode() {
-        paparazzi.snapshot {
-            AppTheme(darkTheme = true) {
-                ProfileUi(state = successState)
-            }
-        }
-    }
-}
-```
-
-## Database Testing
-
-```kotlin
-class UserDatabaseTest {
-    
-    private lateinit var database: AppDatabase
-    private lateinit var queries: UserQueries
-    
-    @BeforeTest
-    fun setup() {
-        val driver = JdbcSqliteDriver(JdbcSqliteDriver.IN_MEMORY)
-        AppDatabase.Schema.create(driver)
-        database = AppDatabase(driver)
-        queries = database.userQueries
-    }
-    
-    @AfterTest
-    fun teardown() {
-        database.close()
-    }
-    
-    @Test
-    fun `insert and retrieve user`() {
-        queries.upsert(
-            id = "123",
-            email = "test@example.com",
-            name = "Test User",
-            avatar_url = null,
-            created_at = 0L,
-            updated_at = 0L,
-        )
-        
-        val user = queries.getById("123").executeAsOne()
-        
-        assertThat(user.id).isEqualTo("123")
-        assertThat(user.email).isEqualTo("test@example.com")
-    }
-    
-    @Test
-    fun `upsert updates existing user`() {
-        queries.upsert("123", "old@example.com", "Old Name", null, 0L, 0L)
-        queries.upsert("123", "new@example.com", "New Name", null, 0L, 1L)
-        
-        val users = queries.getAll().executeAsList()
-        
-        assertThat(users).hasSize(1)
-        assertThat(users.first().email).isEqualTo("new@example.com")
-    }
-    
-    @Test
-    fun `observe users emits on changes`() = runTest {
-        queries.getAll().asFlow().mapToList().test {
-            assertThat(awaitItem()).isEmpty()
-            
-            queries.upsert("1", "a@test.com", "A", null, 0L, 0L)
-            assertThat(awaitItem()).hasSize(1)
-            
-            queries.upsert("2", "b@test.com", "B", null, 0L, 0L)
-            assertThat(awaitItem()).hasSize(2)
-            
-            queries.deleteById("1")
-            assertThat(awaitItem()).hasSize(1)
-            
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-}
-```
-
-## Test Utilities
-
-### Test Data
-
-```kotlin
-// TestFixtures.kt in :core:testing module
-
-object TestData {
-    val testUser = User(
-        id = "test-user-123",
-        name = "Test User",
-        email = "test@example.com",
-        avatarUrl = null,
-        createdAt = Instant.parse("2024-01-01T00:00:00Z"),
-        updatedAt = Instant.parse("2024-01-01T00:00:00Z"),
-    )
-    
-    val testUsers = listOf(
-        testUser,
-        testUser.copy(id = "test-user-456", name = "Another User"),
-        testUser.copy(id = "test-user-789", name = "Third User"),
-    )
-    
-    val testPreferences = Preferences(
-        theme = Theme.SYSTEM,
-        notificationsEnabled = true,
-        language = "en",
-    )
-}
-
-// Builder pattern for complex objects
-fun user(
-    id: String = "test-123",
-    name: String = "Test User",
-    email: String = "test@example.com",
-    block: UserBuilder.() -> Unit = {},
-): User = UserBuilder(id, name, email).apply(block).build()
-
-class UserBuilder(
-    var id: String,
-    var name: String,
-    var email: String,
-) {
-    var avatarUrl: String? = null
-    var createdAt: Instant = Clock.System.now()
-    var updatedAt: Instant = Clock.System.now()
-    
-    fun build() = User(id, name, email, avatarUrl, createdAt, updatedAt)
-}
-```
-
-### Coroutine Test Extensions
-
-```kotlin
-// TestExtensions.kt
-
-fun runTest(block: suspend TestScope.() -> Unit) =
-    kotlinx.coroutines.test.runTest(testBody = block)
-
-// For testing with specific dispatcher
-fun runTestWithMain(block: suspend TestScope.() -> Unit) = runTest {
-    Dispatchers.setMain(StandardTestDispatcher(testScheduler))
-    try {
-        block()
-    } finally {
-        Dispatchers.resetMain()
-    }
-}
-```
-
-### Assertion Extensions
-
-```kotlin
-// AssertionExtensions.kt
-
-inline fun <reified T> Any?.assertIsInstance(): T {
-    assertThat(this).isInstanceOf(T::class.java)
-    return this as T
-}
-
-fun <L, R> Either<L, R>.assertRight(): R {
-    assertThat(this.isRight()).isTrue()
-    return this.getOrNull()!!
-}
-
-fun <L, R> Either<L, R>.assertLeft(): L {
-    assertThat(this.isLeft()).isTrue()
-    return this.leftOrNull()!!
-}
-
-fun <T> Flow<T>.testCollect(
-    scope: CoroutineScope,
-): MutableList<T> {
-    val results = mutableListOf<T>()
-    scope.launch { collect { results.add(it) } }
-    return results
-}
-```
-
-## Test Organization
-
-### Directory Structure
-
-```
-module/
-├── src/
-│   ├── commonMain/kotlin/
-│   │   └── com/app/feature/
-│   │       ├── ProfileScreen.kt
-│   │       ├── ProfilePresenter.kt
-│   │       └── ProfileUi.kt
-│   ├── commonTest/kotlin/
-│   │   └── com/app/feature/
-│   │       ├── ProfilePresenterTest.kt
-│   │       └── fakes/
-│   │           └── FakeUserRepository.kt
-│   └── androidUnitTest/kotlin/
-│       └── com/app/feature/
-│           └── ProfileUiScreenshotTest.kt
-```
-
-### Naming Conventions
-
-```kotlin
-// Test class: {ClassUnderTest}Test
-class ProfilePresenterTest
-
-// Test method: backtick style with description
-@Test
-fun `initial state is loading`()
+@get:Rule
+val roborazziRule = RoborazziRule(
+    composeRule = composeTestRule,
+    captureRoot = composeTestRule.onRoot(),
+    options = RoborazziRule.Options(captureType = RoborazziRule.CaptureType.LastImage())
+)
 
 @Test
-fun `successful load shows user profile`()
-
-@Test
-fun `error state shows retry button when retryable`()
-
-// Or: given_when_then style
-@Test
-fun givenUserExists_whenLoadProfile_thenShowsUser()
-```
-
-## Anti-Patterns
-
-❌ **Don't test implementation details**
-```kotlin
-// WRONG - testing internal state
-assertThat(presenter.internalLoadingState).isTrue()
-
-// RIGHT - test observable behavior
-presenter.test {
-    assertThat(awaitItem()).isInstanceOf<State.Loading>()
+fun `product list matches reference`() {
+    composeTestRule.setContent {
+        AppTheme {
+            ProductListScreen(state = sampleState())
+        }
+    }
 }
 ```
 
-❌ **Don't use real dependencies in unit tests**
+## Fake Construction Patterns
+
+### Interface-based Fakes
+
+Every dependency injected into a Presenter or Repository should have a corresponding Fake in the test source set.
+
 ```kotlin
-// WRONG
-val presenter = ProfilePresenter(RealUserRepository())
+// In commonTest
+class FakeProductApi : ProductApi {
+    var response: ProductResponse? = null
+    var error: Throwable? = null
 
-// RIGHT
-val presenter = ProfilePresenter(FakeUserRepository())
-```
-
-❌ **Don't ignore flaky tests**
-```kotlin
-// WRONG - retry until pass
-@Test
-@FlakyTest
-fun flaky_test() { ... }
-
-// RIGHT - fix the root cause or use proper synchronization
-@Test
-fun deterministic_test() = runTest {
-    advanceUntilIdle()
-    // assertions
+    override suspend fun getProducts(): ProductResponse {
+        error?.let { throw it }
+        return response ?: error("FakeProductApi: no response configured")
+    }
 }
 ```
 
-## References
+### Controllable Fakes with Recording
 
-- Compose Preview Screenshot Testing: https://developer.android.com/studio/preview/compose-screenshot-testing
-- Turbine: https://github.com/cashapp/turbine
-- Roborazzi: https://github.com/takahirom/roborazzi
-- Paparazzi: https://github.com/cashapp/paparazzi
-- Kotest: https://kotest.io/
-- Circuit Testing: https://slackhq.github.io/circuit/testing/
-- Coroutines Testing: https://kotlinlang.org/api/kotlinx.coroutines/kotlinx-coroutines-test/
-- Now in Android Testing: https://github.com/android/nowinandroid
+For verifying side effects without mocks, fakes can record calls.
+
+```kotlin
+class FakeAnalytics : Analytics {
+    val events = mutableListOf<AnalyticsEvent>()
+
+    override fun track(event: AnalyticsEvent) {
+        events.add(event)
+    }
+}
+
+// In test
+val analytics = FakeAnalytics()
+presenter.handleEvent(Event.Purchase)
+assertEquals(1, analytics.events.size)
+assertEquals("purchase_completed", analytics.events.first().name)
+```
+
+## Test Data Builders
+
+Use builder functions to create test data with sensible defaults. Override only what matters for each test.
+
+```kotlin
+fun buildProduct(
+    id: String = "test-id",
+    name: String = "Test Product",
+    price: Double = 9.99,
+    inStock: Boolean = true,
+    category: String = "General",
+): Product = Product(
+    id = id,
+    name = name,
+    price = price,
+    inStock = inStock,
+    category = category,
+)
+
+// Usage: only specify what matters
+val expensiveProduct = buildProduct(price = 999.99)
+val outOfStock = buildProduct(inStock = false)
+```
+
+## Best Practices
+
+1. **Name tests descriptively**: Use backtick-quoted names that read as specifications.
+   - Good: `` `empty cart shows zero total` ``
+   - Bad: `testCart1`
+
+2. **Test behavior, not implementation**: Assert on observable outputs (state, emissions, side effects), never on internal method calls.
+
+3. **Put business logic in commonTest**: If a test does not need `android.content.Context` or a platform API, it belongs in `commonTest`.
+
+4. **One assertion theme per test**: A test should verify one logical behavior. Multiple assertions are fine if they all verify aspects of the same behavior.
+
+5. **Use `advanceUntilIdle()` liberally**: After emitting events or triggering coroutines in `runTest`, call `advanceUntilIdle()` to flush all pending work before asserting.
+
+6. **Arrange-Act-Assert structure**: Keep test bodies clean with clear separation of setup, action, and verification.
+
+7. **Isolate each test**: Fakes should be recreated per test (in `@BeforeTest` or locally). Never share mutable state between tests.
+
+8. **Prefer `StandardTestDispatcher`**: It gives you explicit control over coroutine execution. Use `UnconfinedTestDispatcher` only when you need immediate dispatch (e.g., `stateIn` collectors).
+
+## Common Pitfalls
+
+| Pitfall | Symptom | Fix |
+|---------|---------|-----|
+| Testing implementation details | Test breaks on refactor even though behavior is unchanged | Assert on state/output, not internal method calls |
+| Not calling `advanceUntilIdle()` | State assertions fail because coroutines have not completed | Always advance the test dispatcher after triggering async work |
+| Flaky timing in Flow tests | Tests pass locally but fail in CI | Use `advanceTimeBy()` with exact values instead of real delays; use Turbine `.test {}` |
+| Shared mutable fakes | Tests pass individually but fail when run together | Create fresh fakes per test in `@BeforeTest` |
+| Using `runBlocking` instead of `runTest` | Delays actually wait; virtual time does not work | Always use `runTest` from `kotlinx-coroutines-test` |
+| Forgetting `cancelAndIgnoreRemainingEvents()` | Turbine throws "Unconsumed events" error | Call it when you only care about a subset of emissions |
+| Testing in `androidTest` unnecessarily | Slow test suite, cannot run on iOS | Move to `commonTest` unless platform APIs are required |
+| Hardcoded test data | Tests are brittle and hard to read | Use test data builder functions with defaults |
+
+## Related Skills
+
+- [circuit-expert](../circuit-expert/SKILL.md) -- Presenter architecture and event handling
+- [coroutines-test-expert](../coroutines-test-expert/SKILL.md) -- Deep dive on `runTest`, dispatchers, and virtual time
+- [store5-expert](../store5-expert/SKILL.md) -- Store5 caching patterns and `StoreReadResponse` handling
+- [quality-expert](../quality-expert/SKILL.md) -- Lint rules, static analysis, and code coverage thresholds

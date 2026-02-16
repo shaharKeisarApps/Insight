@@ -1,551 +1,266 @@
 ---
 name: store5-expert
-description: Elite Store5 caching expertise for KMP offline-first apps. Use when implementing caching strategies, connecting network/database layers, handling StoreResponse states, configuring freshness policies, or building reactive data pipelines. Triggers on repository implementation, caching decisions, offline-first patterns, or data synchronization questions.
+description: Elite Store5 caching expertise for KMP. Use for implementing offline-first data repositories, caching, conflict resolution, MutableStore write-back, and reactive data pipelines with Circuit + SQLDelight + Ktor.
 ---
 
-# Store5 Expert Skill
+# Store5 Expert Skill (v5.1.0-alpha08)
 
-## Core Concepts
+## Overview
 
-Store5 provides a reactive caching layer with three core components:
+Store5 is the standard reactive, offline-first data loading library for Kotlin Multiplatform. It unifies network fetching (`Fetcher`), persistent storage (`SourceOfTruth`), and in-memory caching into a single reactive pipeline that emits `StoreReadResponse` to the UI layer. Store5 eliminates manual cache invalidation, deduplicates in-flight requests, and provides a structured approach to data consistency across layers.
 
-```
-┌─────────────┐     ┌─────────────┐     ┌─────────────┐
-│   Fetcher   │────▶│    Store    │◀────│   Source    │
-│  (Network)  │     │   (Cache)   │     │  of Truth   │
-└─────────────┘     └─────────────┘     │ (Database)  │
-                           │            └─────────────┘
-                           ▼
-                    ┌─────────────┐
-                    │ StoreResponse│
-                    │ Loading/Data │
-                    │ /Error/NoNew │
-                    └─────────────┘
-```
+In this project, Store5 integrates with **Ktor 3.4.0** for network fetching, **SQLDelight 2.2.1** for persistent storage, **Metro DI** for dependency injection, and **Circuit MVI** for presenter consumption.
 
-## Installation
+## When to Use
+
+- **Offline Support**: App must display data without network connectivity. Store serves cached data from SourceOfTruth while background-refreshing.
+- **Caching**: Minimize redundant network calls. Store deduplicates concurrent requests for the same key and serves from memory/disk cache.
+- **Data Consistency**: Ensure a single source of truth (database) that all consumers observe reactively.
+- **Conflict Resolution**: Track write failures with `Bookkeeper` and retry synchronization when connectivity returns.
+- **Optimistic Updates**: Write locally first via `MutableStore`, then sync to server, rolling back on failure.
+- **Reactive Data Pipelines**: Compose-friendly `Flow<StoreReadResponse>` drives loading/data/error states in presenters.
+
+## Quick Reference
+
+See [reference.md](reference.md) for complete API signatures and builder options.
+See [examples.md](examples.md) for production-ready implementations with Metro, Circuit, Ktor, and SQLDelight.
+
+## Core Components
+
+### 1. Fetcher
+
+The network data source. Defines how to retrieve fresh data from a remote API. Two factory methods:
+
+- **`Fetcher.of(name) { key -> ... }`** -- Suspend function returning a single value. Use for standard REST calls via Ktor.
+- **`Fetcher.ofFlow(name) { key -> ... }`** -- Returns a `Flow`. Use for WebSocket streams, SSE, or polling.
+
+The `name` parameter is required and used for logging/debugging.
 
 ```kotlin
-// build.gradle.kts
-dependencies {
-    implementation("org.mobilenativefoundation.store:store5:5.1.0-alpha03")
+Fetcher.of("fetchProduct") { key: ProductId ->
+    httpClient.get("/api/products/${key.value}").body<ProductDto>()
 }
 ```
 
-## Basic Store Setup
+### 2. SourceOfTruth (SoT)
 
-### Simple Store (Network Only)
+The persistent storage layer -- typically SQLDelight. Provides reactive reads and suspend writes. The `reader` must return `Flow<T?>` so Store can observe database changes and re-emit to all collectors.
 
 ```kotlin
-private val store: Store<String, User> = StoreBuilder
-    .from(Fetcher.of { userId: String ->
-        api.getUser(userId)
-    })
-    .build()
-
-// Usage
-val user = store.fresh("user-123")  // Force network
-val cached = store.get("user-123")  // Cache or network
+SourceOfTruth.of(
+    reader = { key -> queries.selectById(key.value).asFlow().mapToOneOrNull(dispatchers.io) },
+    writer = { key, entity -> queries.upsert(entity) },
+    delete = { key -> queries.deleteById(key.value) },
+    deleteAll = { queries.deleteAll() }
+)
 ```
 
-### Store with Source of Truth (Offline-First)
+### 3. Store
+
+The read-only pipeline connecting Fetcher and SourceOfTruth with an in-memory cache. Built via `StoreBuilder.from()`. Consumers call `store.stream(request)` to get a `Flow<StoreReadResponse<Output>>`.
+
+### 4. MutableStore
+
+Extends Store with write-back capabilities. Requires a `Converter` (to transform between network/local/output types) and an `Updater` (to push local changes to the server). Optionally accepts a `Bookkeeper` for tracking sync failures.
+
+### 5. Converter
+
+Transforms data between three model layers:
+- **Network** -- DTO from the API (e.g., `ProductDto`)
+- **Local** -- Entity stored in the database (e.g., `ProductEntity`)
+- **Output** -- Domain model consumed by the UI (e.g., `Product`)
+
+Defines `fromNetworkToLocal(network): Local` and `fromOutputToLocal(output): Local`.
+
+### 6. Validator
+
+Determines whether cached data is still valid. Receives the `Output` item and returns `true` (valid) or `false` (stale, re-fetch). Use for time-based staleness or version-based invalidation.
 
 ```kotlin
-class UserRepositoryImpl @Inject constructor(
-    private val api: UserApi,
-    private val db: AppDatabase,
-) : UserRepository {
-    
-    private val store: Store<String, User> = StoreBuilder.from(
-        fetcher = Fetcher.of { userId: String ->
-            api.getUser(userId).also { response ->
-                // Optional: transform network response
-            }
-        },
-        sourceOfTruth = SourceOfTruth.of(
-            reader = { userId: String ->
-                db.userQueries
-                    .getById(userId)
-                    .asFlow()
-                    .mapToOneOrNull()
-                    .map { it?.toDomain() }
-            },
-            writer = { userId: String, user: User ->
-                db.userQueries.upsert(user.toEntity())
-            },
-            delete = { userId: String ->
-                db.userQueries.deleteById(userId)
-            },
-            deleteAll = {
-                db.userQueries.deleteAll()
-            },
-        ),
-    ).build()
-    
-    override fun observeUser(userId: String): Flow<StoreResponse<User>> =
-        store.stream(StoreReadRequest.cached(userId, refresh = true))
-    
-    override suspend fun getUser(userId: String): User =
-        store.get(userId)
-    
-    override suspend fun refreshUser(userId: String): User =
-        store.fresh(userId)
-    
-    override suspend fun clearUser(userId: String) {
-        store.clear(userId)
-    }
+Validator.by { item: Product ->
+    item.fetchedAt + 5.minutes > Clock.System.now()
 }
 ```
 
-## StoreResponse Handling
+### 7. Bookkeeper
 
-### Response Types
+Tracks synchronization failures for `MutableStore`. When a write to the server fails, the Bookkeeper records the timestamp. On next stream, Store can detect unsynced items and retry. Provides `getLastFailedSync`, `setLastFailedSync`, `clear`, and `clearAll`.
 
-```kotlin
-sealed class StoreResponse<out T> {
-    // Loading state - network request in progress
-    data class Loading(val origin: Origin) : StoreResponse<Nothing>()
-    
-    // Data available
-    data class Data<T>(val value: T, val origin: Origin) : StoreResponse<T>()
-    
-    // Error occurred
-    sealed class Error : StoreResponse<Nothing>() {
-        data class Exception(val error: Throwable, val origin: Origin) : Error()
-        data class Message(val message: String, val origin: Origin) : Error()
-    }
-    
-    // No new data (validator returned false, data unchanged)
-    data class NoNewData(val origin: Origin) : StoreResponse<Nothing>()
-}
+## Store Pipeline
 
-enum class Origin {
-    Cache,      // From SourceOfTruth
-    Fetcher,    // From network
-    Initial     // Initial empty state
-}
+Data flows through the pipeline in this order:
+
+```
+Request (StoreReadRequest)
+    |
+    v
+[Memory Cache] -- hit? --> emit Data(origin=Cache)
+    |  miss
+    v
+[SourceOfTruth] -- has data? --> emit Data(origin=SourceOfTruth)
+    |  also triggers Fetcher if refresh=true or no cached data
+    v
+[Fetcher] -- network call
+    |
+    v
+[Converter] -- fromNetworkToLocal (if configured)
+    |
+    v
+[SourceOfTruth] -- writer stores the data
+    |
+    v
+[SourceOfTruth reader] -- re-emits via Flow
+    |
+    v
+[Validator] -- isValid? (if configured, invalid triggers re-fetch)
+    |
+    v
+[Memory Cache] -- updated
+    |
+    v
+UI receives Data(origin=Fetcher)
 ```
 
-### Pattern: Convert to UI State
+## StoreReadResponse Types
+
+> **CRITICAL**: The class is `StoreReadResponse`, NOT `StoreResponse`. This was renamed.
+
+| Type | Properties | When Emitted |
+|------|-----------|--------------|
+| `Initial` | (none) | Sentinel before any data. Always first emission. |
+| `Loading(origin)` | `origin: StoreReadResponseOrigin` | Fetcher or SoT is actively loading. |
+| `Data(value, origin)` | `value: Output`, `origin` | Data available. Origin indicates source (Cache, SourceOfTruth, Fetcher). |
+| `NoNewData(origin)` | `origin` | Fetcher completed but returned no new data (304, empty). |
+| `Error.Exception(error, origin)` | `error: Throwable`, `origin` | Throwable-based failure. |
+| `Error.Message(message, origin)` | `message: String`, `origin` | String-based failure message. |
+| `Error.Custom<E>(error, origin)` | `error: E`, `origin` | Typed custom error. |
+
+### Utility Extensions
+
+- `dataOrNull()` -- Extract value or null
+- `requireData()` -- Extract value or throw
+- `errorMessageOrNull()` -- Get error message string
+- `throwIfError()` -- Rethrow if Error.Exception
+
+## StoreReadRequest Types
+
+| Factory Method | Behavior |
+|---------------|----------|
+| `cached(key, refresh = false)` | Return from memory/SoT cache. If `refresh=true`, also trigger Fetcher in background. |
+| `fresh(key)` | Skip all caches, force network fetch. Still writes result to SoT and cache. |
+| `skipMemory(key, refresh)` | Bypass memory cache, read from SoT first, optionally refresh from network. |
+| `localOnly(key)` | Only read from memory cache and SoT. Never trigger Fetcher. For airplane mode. |
+| `freshWithFallBackToSourceOfTruth(key)` | Force fresh, but if Fetcher fails, fall back to SoT data instead of emitting error. |
+
+## Integration with Circuit
+
+Circuit Presenters consume Store streams via `collectAsRetainedState` or manual collection in `LaunchedEffect`. Map `StoreReadResponse` to a UI state sealed interface:
 
 ```kotlin
-@CircuitInject(ProfileScreen::class, AppScope::class)
 @Composable
-fun ProfilePresenter(
-    screen: ProfileScreen,
-    navigator: Navigator,
-    userRepository: UserRepository,
-): ProfileScreen.State {
-    var state by rememberRetained { 
-        mutableStateOf<ProfileScreen.State>(ProfileScreen.State.Loading) 
-    }
-    
-    LaunchedEffect(screen.userId) {
-        userRepository.observeUser(screen.userId).collect { response ->
-            state = response.toUiState(
-                currentState = state,
-                onRetry = { /* refresh logic */ },
-            )
-        }
-    }
-    
-    return state
-}
+override fun present(): ProductScreen.State {
+    var uiState by rememberRetained { mutableStateOf<UiState>(UiState.Loading) }
 
-// Extension for clean mapping
-fun <T> StoreResponse<T>.toUiState(
-    currentState: UiState<T>,
-    transform: (T) -> UiState<T> = { UiState.Success(it) },
-    onRetry: () -> Unit,
-): UiState<T> = when (this) {
-    is StoreResponse.Loading -> when (currentState) {
-        is UiState.Success -> currentState.copy(isRefreshing = true)
-        else -> UiState.Loading
-    }
-    is StoreResponse.Data -> transform(value).let {
-        if (it is UiState.Success) it.copy(
-            isFromCache = origin == StoreResponse.Origin.Cache
-        ) else it
-    }
-    is StoreResponse.Error.Exception -> UiState.Error(
-        message = error.message ?: "Unknown error",
-        onRetry = onRetry,
-    )
-    is StoreResponse.Error.Message -> UiState.Error(
-        message = message,
-        onRetry = onRetry,
-    )
-    is StoreResponse.NoNewData -> currentState
-}
-```
-
-### Pattern: Convert to Either
-
-```kotlin
-fun <T> Flow<StoreResponse<T>>.toEitherFlow(): Flow<Either<DataError, T>> =
-    this.filterNot { it is StoreResponse.Loading || it is StoreResponse.NoNewData }
-        .map { response ->
-            when (response) {
-                is StoreResponse.Data -> response.value.right()
-                is StoreResponse.Error.Exception -> 
-                    DataError.fromThrowable(response.error).left()
-                is StoreResponse.Error.Message -> 
-                    DataError.Unknown(response.message).left()
-                else -> DataError.Unknown("Unexpected state").left()
+    LaunchedEffect(Unit) {
+        repository.getProduct(screen.id).collect { response ->
+            uiState = when (response) {
+                is StoreReadResponse.Loading -> UiState.Loading
+                is StoreReadResponse.Data -> UiState.Success(response.value)
+                is StoreReadResponse.Error -> UiState.Error(response.errorMessageOrNull())
+                else -> uiState // Initial, NoNewData -- keep current state
             }
         }
-
-// Usage in repository
-override fun observeUser(userId: String): Flow<Either<DataError, User>> =
-    store.stream(StoreReadRequest.cached(userId, refresh = true))
-        .toEitherFlow()
-```
-
-## Advanced Patterns
-
-### Store with Validator (Freshness)
-
-```kotlin
-private val store = StoreBuilder.from(
-    fetcher = Fetcher.of { key -> api.getData(key) },
-    sourceOfTruth = sourceOfTruth,
-)
-.validator(Validator.by { item: CachedData ->
-    // Data is fresh if updated within last hour
-    val age = Clock.System.now() - item.fetchedAt
-    age < 1.hours
-})
-.build()
-
-// When validator returns false:
-// - Cached data still emitted (stale)
-// - Fetcher triggered automatically
-// - Fresh data emitted when available
-```
-
-### Store with Converter (Type Transformation)
-
-```kotlin
-// Network type → Local type → Domain type
-private val store = StoreBuilder.from<String, NetworkUser, User, DbUser>(
-    fetcher = Fetcher.of { userId -> api.getUser(userId) },
-    sourceOfTruth = SourceOfTruth.of(
-        reader = { userId -> db.userQueries.getById(userId).asFlow().mapToOneOrNull() },
-        writer = { _, dbUser -> db.userQueries.upsert(dbUser) },
-    ),
-    converter = Converter.Builder<NetworkUser, User, DbUser>()
-        .fromNetworkToLocal { networkUser -> networkUser.toDomain() }
-        .fromLocalToOutput { dbUser -> dbUser.toDomain() }
-        .fromOutputToLocal { user -> user.toEntity() }
-        .build(),
-).build()
-```
-
-### Mutable Store (Write-Through)
-
-```kotlin
-private val mutableStore: MutableStore<String, User> = MutableStoreBuilder.from(
-    fetcher = Fetcher.of { key -> api.getUser(key) },
-    sourceOfTruth = SourceOfTruth.of(
-        reader = { key -> db.userQueries.getById(key).asFlow().mapToOneOrNull() },
-        writer = { key, user -> db.userQueries.upsert(user) },
-    ),
-).build()
-
-// Write operations
-suspend fun updateUser(user: User): StoreWriteResponse {
-    return mutableStore.write(
-        request = StoreWriteRequest.of(
-            key = user.id,
-            value = user,
-        )
-    )
-}
-
-// Handle write response
-when (val response = updateUser(updatedUser)) {
-    is StoreWriteResponse.Success -> {
-        // Written to SOT, may trigger sync
     }
-    is StoreWriteResponse.Error.Exception -> {
-        // Handle error
-    }
-    is StoreWriteResponse.Error.Message -> {
-        // Handle error message
-    }
+
+    return ProductScreen.State(uiState = uiState) { event -> /* ... */ }
 }
 ```
 
-### Paged Store
+## Integration with SQLDelight
+
+SQLDelight provides the ideal `SourceOfTruth` implementation. Use `.asFlow().mapToOneOrNull()` for the reader and direct query calls for writer/delete:
 
 ```kotlin
-data class PageKey(
-    val query: String,
-    val page: Int,
-    val pageSize: Int = 20,
-)
-
-data class PagedResult<T>(
-    val items: List<T>,
-    val nextPage: Int?,
-    val totalCount: Int,
-)
-
-private val pagedStore: Store<PageKey, PagedResult<Item>> = StoreBuilder.from(
-    fetcher = Fetcher.of { key: PageKey ->
-        api.search(
-            query = key.query,
-            page = key.page,
-            size = key.pageSize,
-        ).let { response ->
-            PagedResult(
-                items = response.items,
-                nextPage = if (response.hasMore) key.page + 1 else null,
-                totalCount = response.total,
-            )
-        }
+SourceOfTruth.of(
+    reader = { key: ProductId ->
+        productQueries.selectById(key.value)
+            .asFlow()
+            .mapToOneOrNull(dispatchers.io)
     },
-    sourceOfTruth = SourceOfTruth.of(
-        reader = { key ->
-            db.itemQueries.search(
-                query = "%${key.query}%",
-                limit = key.pageSize.toLong(),
-                offset = (key.page * key.pageSize).toLong(),
-            ).asFlow().mapToList().map { items ->
-                PagedResult(items, null, items.size) // Simplified for cache
-            }
-        },
-        writer = { key, result ->
-            db.transaction {
-                if (key.page == 0) {
-                    // Clear previous search results on first page
-                    db.itemQueries.deleteByQuery(key.query)
-                }
-                result.items.forEach { db.itemQueries.upsert(it) }
-            }
-        },
-    ),
-).build()
-```
-
-### Store with Memory Cache Policy
-
-```kotlin
-private val store = StoreBuilder.from(
-    fetcher = fetcher,
-    sourceOfTruth = sourceOfTruth,
+    writer = { _, entity: ProductEntity ->
+        productQueries.upsert(
+            id = entity.id,
+            name = entity.name,
+            price = entity.price,
+            updatedAt = entity.updatedAt
+        )
+    },
+    delete = { key -> productQueries.deleteById(key.value) },
+    deleteAll = { productQueries.deleteAll() }
 )
-.cachePolicy(
-    MemoryPolicy.builder<String, User>()
-        .setMaxSize(100)  // Max 100 items in memory
-        .setExpireAfterWrite(30.minutes)  // Expire after 30 min
-        .build()
-)
-.build()
 ```
 
-## StoreReadRequest Options
+## Integration with Ktor
+
+Ktor `HttpClient` powers the Fetcher. Always inject the client via Metro DI and map responses to DTOs:
 
 ```kotlin
-// Get from cache, refresh in background
-store.stream(StoreReadRequest.cached(key, refresh = true))
-
-// Get from cache only (no network)
-store.stream(StoreReadRequest.cached(key, refresh = false))
-
-// Skip cache, force network (still writes to SOT)
-store.stream(StoreReadRequest.fresh(key))
-
-// Skip cache, skip SOT write
-store.stream(StoreReadRequest.skipMemory(key, refresh = true))
-```
-
-## Complete Repository Example
-
-```kotlin
-interface UserRepository {
-    fun observeUser(userId: String): Flow<Either<DataError, User>>
-    fun observeUsers(): Flow<Either<DataError, List<User>>>
-    suspend fun refreshUser(userId: String): Either<DataError, User>
-    suspend fun updateUser(user: User): Either<DataError, Unit>
-    suspend fun clearCache()
-}
-
-@ContributesBinding(AppScope::class)
-@SingleIn(AppScope::class)
-@Inject
-class UserRepositoryImpl(
-    private val api: UserApi,
-    private val db: AppDatabase,
-) : UserRepository {
-    
-    // Single user store
-    private val userStore: Store<String, User> = StoreBuilder.from(
-        fetcher = Fetcher.of { userId: String ->
-            api.getUser(userId).getOrThrow()
-        },
-        sourceOfTruth = SourceOfTruth.of(
-            reader = { userId ->
-                db.userQueries.getById(userId).asFlow().mapToOneOrNull().map { it?.toDomain() }
-            },
-            writer = { _, user -> db.userQueries.upsert(user.toEntity()) },
-            delete = { userId -> db.userQueries.deleteById(userId) },
-            deleteAll = { db.userQueries.deleteAll() },
-        ),
-    )
-    .validator(Validator.by { user ->
-        user.fetchedAt > Clock.System.now() - 5.minutes
-    })
-    .build()
-    
-    // List store (different key type)
-    private val usersStore: Store<Unit, List<User>> = StoreBuilder.from(
-        fetcher = Fetcher.of { _: Unit ->
-            api.getUsers().getOrThrow()
-        },
-        sourceOfTruth = SourceOfTruth.of(
-            reader = { _ ->
-                db.userQueries.getAll().asFlow().mapToList().map { list ->
-                    list.map { it.toDomain() }
-                }
-            },
-            writer = { _, users ->
-                db.transaction {
-                    db.userQueries.deleteAll()
-                    users.forEach { db.userQueries.upsert(it.toEntity()) }
-                }
-            },
-        ),
-    ).build()
-    
-    // Mutable store for writes
-    private val mutableUserStore: MutableStore<String, User> = MutableStoreBuilder.from(
-        fetcher = Fetcher.of { userId: String -> api.getUser(userId).getOrThrow() },
-        sourceOfTruth = SourceOfTruth.of(
-            reader = { userId ->
-                db.userQueries.getById(userId).asFlow().mapToOneOrNull().map { it?.toDomain() }
-            },
-            writer = { _, user -> db.userQueries.upsert(user.toEntity()) },
-        ),
-    ).build()
-    
-    override fun observeUser(userId: String): Flow<Either<DataError, User>> =
-        userStore.stream(StoreReadRequest.cached(userId, refresh = true))
-            .toEitherFlow()
-    
-    override fun observeUsers(): Flow<Either<DataError, List<User>>> =
-        usersStore.stream(StoreReadRequest.cached(Unit, refresh = true))
-            .toEitherFlow()
-    
-    override suspend fun refreshUser(userId: String): Either<DataError, User> =
-        Either.catch { userStore.fresh(userId) }
-            .mapLeft { DataError.fromThrowable(it) }
-    
-    override suspend fun updateUser(user: User): Either<DataError, Unit> =
-        Either.catch {
-            // Optimistic update: write locally first
-            mutableUserStore.write(
-                StoreWriteRequest.of(key = user.id, value = user)
-            )
-            // Then sync to server
-            api.updateUser(user.id, user.toRequest()).bind()
-        }.mapLeft { DataError.fromThrowable(it) }
-    
-    override suspend fun clearCache() {
-        userStore.clear()
-        usersStore.clear()
-    }
+Fetcher.of("fetchProduct") { key: ProductId ->
+    httpClient.get("/api/products/${key.value}").body<ProductDto>()
 }
 ```
 
-## Testing Stores
+For paginated endpoints, use `Fetcher.ofFlow` with a `flow { }` builder that handles pagination internally.
+
+## Core Rules
+
+1. **Always use typed Keys.** Define `@JvmInline value class ProductId(val value: String)` instead of raw `String`. This prevents key collisions across different Store instances.
+2. **Use `StoreReadResponse`, never `StoreResponse`.** The type was renamed. Using the old name will not compile.
+3. **Provide all four SoT callbacks.** Always implement `reader`, `writer`, `delete`, and `deleteAll` on `SourceOfTruth.of()`. Missing `delete`/`deleteAll` prevents Store from cleaning up stale data.
+4. **Scope Store as singleton.** Use `@SingleIn(AppScope::class)` with Metro. Creating multiple Store instances for the same data source causes cache fragmentation and duplicated network calls.
+5. **Never call Store directly from UI.** Always wrap Store in a Repository that maps `StoreReadResponse` to domain-specific types and hides caching details.
+6. **Handle all response types.** In `when` blocks, always handle `Initial`, `Loading`, `Data`, `NoNewData`, and all `Error` subtypes. Use `else` only for `Initial`/`NoNewData` no-ops.
+7. **Use `cached(key, refresh = true)` for pull-to-refresh.** This serves cached data immediately while fetching fresh data in the background, giving the user instant feedback.
+8. **Use `fresh()` sparingly.** It bypasses all caches and hits the network. Reserve for explicit user actions like "force refresh" or post-mutation revalidation.
+9. **Provide a Converter when network and local models differ.** Never reuse DTOs as database entities. Separate concerns with Network/Local/Output model layers.
+10. **Close or scope the Store's CoroutineScope.** If using a custom scope via `StoreBuilder.scope()`, ensure it is cancelled when the owning component is destroyed.
+
+## Common Pitfalls
+
+| Pitfall | Consequence | Fix |
+|---------|-------------|-----|
+| Using `StoreResponse` instead of `StoreReadResponse` | Compilation error | Use `StoreReadResponse` everywhere |
+| Forgetting `name` parameter in `Fetcher.of()` | Compilation error (required param) | Always provide a descriptive string name |
+| SoT reader not returning `Flow` | Store cannot observe changes reactively | Use `.asFlow().mapToOneOrNull()` from SQLDelight |
+| Not handling `Error.Exception` vs `Error.Message` | Lost error context | Match on all `Error` subtypes in `when` |
+| Creating Store per-screen instead of per-scope | Duplicated caches, wasted memory | `@SingleIn(AppScope::class)` in Metro |
+| Using `flow.first()` instead of `stream().collect` | Misses subsequent updates (SoT changes, refreshes) | Always collect the full stream |
+| Ignoring `NoNewData` | UI flickers if treated as loading | Keep current state on `NoNewData` |
+| Not providing `delete`/`deleteAll` on SoT | `store.clear()` silently fails | Always implement all four SoT callbacks |
+
+## Gradle Dependencies
+
+```toml
+# gradle/libs.versions.toml
+[versions]
+store = "5.1.0-alpha08"
+
+[libraries]
+store5 = { module = "org.mobilenativefoundation.store:store5", version.ref = "store" }
+store-cache = { module = "org.mobilenativefoundation.store:cache5", version.ref = "store" }
+```
 
 ```kotlin
-class UserRepositoryTest {
-    
-    private val fakeApi = FakeUserApi()
-    private val testDb = createTestDatabase()
-    private lateinit var repository: UserRepositoryImpl
-    
-    @BeforeTest
-    fun setup() {
-        repository = UserRepositoryImpl(fakeApi, testDb)
-    }
-    
-    @Test
-    fun `observeUser emits cache then network`() = runTest {
-        // Seed cache
-        testDb.userQueries.upsert(cachedUser.toEntity())
-        fakeApi.setUser(freshUser)
-        
-        repository.observeUser("123").test {
-            // First: cached data
-            val cached = awaitItem()
-            assertThat(cached.getOrNull()).isEqualTo(cachedUser)
-            
-            // Second: fresh data from network
-            val fresh = awaitItem()
-            assertThat(fresh.getOrNull()).isEqualTo(freshUser)
-            
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
-    
-    @Test
-    fun `observeUser returns cache on network error`() = runTest {
-        testDb.userQueries.upsert(cachedUser.toEntity())
-        fakeApi.setError(IOException("No network"))
-        
-        repository.observeUser("123").test {
-            // Should still get cached data
-            val result = awaitItem()
-            assertThat(result.getOrNull()).isEqualTo(cachedUser)
-            
-            // Error should come next (or be filtered depending on impl)
-            cancelAndIgnoreRemainingEvents()
-        }
-    }
+// build.gradle.kts (shared module)
+commonMain.dependencies {
+    implementation(libs.store5)
+    implementation(libs.store.cache)
 }
 ```
 
-## Anti-Patterns
+## See Also
 
-❌ **Don't ignore StoreResponse.Loading in UI**
-```kotlin
-// WRONG - UI flickers or shows stale content
-.filter { it is StoreResponse.Data }
-
-// RIGHT - Handle loading state properly
-.collect { response ->
-    when (response) {
-        is StoreResponse.Loading -> showLoading()
-        is StoreResponse.Data -> showData(response.value)
-        is StoreResponse.Error -> showError(response)
-    }
-}
-```
-
-❌ **Don't create store instances per-call**
-```kotlin
-// WRONG - creates new store each time
-fun getUser(id: String) = StoreBuilder.from(...).build().get(id)
-
-// RIGHT - reuse single store instance
-private val store = StoreBuilder.from(...).build()
-fun getUser(id: String) = store.get(id)
-```
-
-❌ **Don't forget to handle NoNewData**
-```kotlin
-// WRONG - might miss current state
-is StoreResponse.NoNewData -> { /* nothing */ }
-
-// RIGHT - preserve current state
-is StoreResponse.NoNewData -> state // Keep showing current data
-```
-
-## References
-
-- Store5 GitHub: https://github.com/MobileNativeFoundation/Store
-- Store5 Documentation: https://mobilenativefoundation.github.io/Store/
-- KMP Offline-First Guide: https://touchlab.co/kmp-offline-first
+- [ktor-client-expert](../ktor-client-expert/SKILL.md) -- Network fetcher configuration for Store5
+- [kotlinx-serialization-expert](../kotlinx-serialization-expert/SKILL.md) -- JSON parsing for Store converters
+- [sqldelight-expert](../sqldelight-expert/SKILL.md) -- Local persistence as Store source of truth
+- [coroutines-core-expert](../coroutines-core-expert/SKILL.md) -- Flow patterns for Store streams
