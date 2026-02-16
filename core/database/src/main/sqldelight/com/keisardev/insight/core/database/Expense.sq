@@ -46,6 +46,9 @@ WHERE date >= ? AND date < ?;
 insert:
 INSERT INTO Expense (amount, categoryId, description, date, createdAt) VALUES (?, ?, ?, ?, ?);
 
+lastInsertRowId:
+SELECT last_insert_rowid();
+
 update:
 UPDATE Expense SET amount = ?, categoryId = ?, description = ?, date = ? WHERE id = ?;
 

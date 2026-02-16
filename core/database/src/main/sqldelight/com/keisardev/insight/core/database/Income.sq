@@ -47,6 +47,9 @@ WHERE date >= ? AND date < ?;
 incomeInsert:
 INSERT INTO Income (amount, incomeType, categoryId, description, date, createdAt) VALUES (?, ?, ?, ?, ?, ?);
 
+incomeLastInsertRowId:
+SELECT last_insert_rowid();
+
 incomeUpdate:
 UPDATE Income SET amount = ?, incomeType = ?, categoryId = ?, description = ?, date = ? WHERE id = ?;
 

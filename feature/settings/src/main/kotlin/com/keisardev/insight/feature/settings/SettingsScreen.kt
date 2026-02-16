@@ -59,7 +59,9 @@ import com.keisardev.insight.core.ai.service.AiServiceStrategy
 import com.keisardev.insight.core.common.di.AppScope
 import com.keisardev.insight.core.data.datastore.UserSettings
 import com.keisardev.insight.core.data.datastore.UserSettingsRepository
+import com.keisardev.insight.core.data.repository.CategoryRepository
 import com.keisardev.insight.core.data.repository.ExpenseRepository
+import com.keisardev.insight.core.data.repository.IncomeCategoryRepository
 import com.keisardev.insight.core.data.repository.IncomeRepository
 import com.keisardev.insight.core.designsystem.theme.InsightTheme
 import com.keisardev.insight.core.model.ModelInfo
@@ -96,6 +98,7 @@ data object SettingsScreen : Screen {
         val showModelSelection: Boolean,
         val currencyCode: String,
         val showCurrencyPicker: Boolean,
+        val categoryCount: Int,
         val eventSink: (Event) -> Unit,
     ) : CircuitUiState
 
@@ -123,6 +126,8 @@ data object SettingsScreen : Screen {
 class SettingsPresenter(
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
+    private val categoryRepository: CategoryRepository,
+    private val incomeCategoryRepository: IncomeCategoryRepository,
     private val aiServiceStrategy: AiServiceStrategy,
     private val modelRepository: ModelRepository,
     private val modelDownloadTrigger: ModelDownloadTrigger,
@@ -146,6 +151,10 @@ class SettingsPresenter(
             .collectAsRetainedState(initial = false)
         val settings by userSettingsRepository.observeSettings()
             .collectAsRetainedState(initial = UserSettings())
+        val expenseCategories by categoryRepository.observeAllCategories()
+            .collectAsRetainedState(initial = emptyList())
+        val incomeCategories by incomeCategoryRepository.observeAllCategories()
+            .collectAsRetainedState(initial = emptyList())
         val scope = rememberCoroutineScope()
 
         return SettingsScreen.State(
@@ -162,6 +171,7 @@ class SettingsPresenter(
             showModelSelection = showModelSelection,
             currencyCode = settings.currencyCode,
             showCurrencyPicker = showCurrencyPicker,
+            categoryCount = expenseCategories.size + incomeCategories.size,
         ) { event ->
             when (event) {
                 SettingsScreen.Event.OnClearDataClick -> {
@@ -258,7 +268,7 @@ fun SettingsUi(state: SettingsScreen.State, modifier: Modifier = Modifier) {
                     SettingsItem(
                         icon = Icons.Default.Category,
                         title = "Manage Categories",
-                        subtitle = "7 categories",
+                        subtitle = "${state.categoryCount} categories",
                         onClick = {
                             scope.launch {
                                 snackbarHostState.showSnackbar("Coming soon")
@@ -661,6 +671,7 @@ private fun PreviewSettingsUi() {
                 showModelSelection = false,
                 currencyCode = "USD",
                 showCurrencyPicker = false,
+                categoryCount = 14,
                 eventSink = {},
             )
         )
@@ -686,6 +697,7 @@ private fun PreviewSettingsUiWithDialog() {
                 showModelSelection = false,
                 currencyCode = "USD",
                 showCurrencyPicker = false,
+                categoryCount = 14,
                 eventSink = {},
             )
         )
