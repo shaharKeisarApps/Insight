@@ -21,7 +21,11 @@ Most Android samples use Dagger/Hilt and MVVM. Insight takes a different path:
 
 ## Screenshots
 
-<!-- Add screenshots here -->
+| Expenses | Income | Reports | AI Chat | Settings |
+|----------|--------|---------|---------|----------|
+| ![Expenses](docs/screenshots/light/expenses_main.png) | ![Income](docs/screenshots/light/income_main.png) | ![Reports](docs/screenshots/light/reports_main.png) | ![AI Chat](docs/screenshots/light/ai_chat_main.png) | ![Settings](docs/screenshots/light/settings_main.png) |
+
+See [docs/screenshots/README.md](docs/screenshots/README.md) for the full screenshot capture guide covering light, dark, and accessibility themes.
 
 ---
 

@@ -98,8 +98,7 @@ class ExpenseRepositoryImpl(
             date = dateMillis,
             createdAt = createdAtMillis,
         )
-        // Return the last inserted row id
-        database.expenseQueries.selectAll().executeAsList().firstOrNull()?.id ?: 0L
+        database.expenseQueries.lastInsertRowId().executeAsOne()
     }
 
     override suspend fun updateExpense(expense: Expense): Unit = withContext(Dispatchers.IO) {

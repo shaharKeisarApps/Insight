@@ -100,8 +100,7 @@ class IncomeRepositoryImpl(
             date = dateMillis,
             createdAt = createdAtMillis,
         )
-        // Return the last inserted row id
-        database.incomeQueries.incomeSelectAll().executeAsList().firstOrNull()?.id ?: 0L
+        database.incomeQueries.incomeLastInsertRowId().executeAsOne()
     }
 
     override suspend fun updateIncome(income: Income): Unit = withContext(Dispatchers.IO) {
