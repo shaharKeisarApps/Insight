@@ -207,8 +207,6 @@ class ExpensesPresenterTest {
 
     @Test
     fun `isLoading is always false`() = runTest {
-        // Note: Current implementation hardcodes isLoading = false
-        // This test documents the current behavior
         presenterTestOf(
             presentFunction = {
                 ExpensesPresenter(
@@ -220,6 +218,22 @@ class ExpensesPresenterTest {
         ) {
             val state = awaitItem()
             assertThat(state.isLoading).isFalse()
+        }
+    }
+
+    @Test
+    fun `currency code comes from user settings`() = runTest {
+        presenterTestOf(
+            presentFunction = {
+                ExpensesPresenter(
+                    navigator = navigator,
+                    expenseRepository = expenseRepository,
+                    userSettingsRepository = userSettingsRepository,
+                ).present()
+            },
+        ) {
+            val state = awaitItem()
+            assertThat(state.currencyCode).isEqualTo("DEVICE")
         }
     }
 }

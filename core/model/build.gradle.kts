@@ -10,4 +10,7 @@ android {
 dependencies {
     implementation(project(":core:common"))
     api(libs.kotlinx.datetime)
+
+    testImplementation(libs.junit)
+    testImplementation(libs.truth)
 }
