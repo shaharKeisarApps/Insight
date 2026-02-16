@@ -1,0 +1,6 @@
+# Baseline profile placeholder
+# Generate real profiles by running:
+# ./gradlew :benchmark:connectedBenchmarkAndroidTest -P android.testInstrumentationRunnerArguments.class=com.keisardev.insight.benchmark.BaselineProfileGenerator
+#
+# Then copy the generated profile from benchmark output to this file.
+# See: https://developer.android.com/topic/performance/baselineprofiles
