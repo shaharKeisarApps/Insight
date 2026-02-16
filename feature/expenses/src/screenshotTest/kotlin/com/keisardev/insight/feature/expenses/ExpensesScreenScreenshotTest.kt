@@ -31,6 +31,7 @@ fun ExpensesScreenEmptyLightPreview() {
                 isLoading = false,
                 isRefreshing = false,
                 expenses = emptyList(),
+                currencyCode = "USD",
                 eventSink = noOpEventSink,
             ),
         )
@@ -51,6 +52,7 @@ fun ExpensesScreenEmptyDarkPreview() {
                 isLoading = false,
                 isRefreshing = false,
                 expenses = emptyList(),
+                currencyCode = "USD",
                 eventSink = noOpEventSink,
             ),
         )
@@ -69,6 +71,7 @@ fun ExpensesScreenLoadingPreview() {
                 isLoading = true,
                 isRefreshing = false,
                 expenses = emptyList(),
+                currencyCode = "USD",
                 eventSink = noOpEventSink,
             ),
         )
@@ -87,6 +90,7 @@ fun ExpensesScreenWithDataLightPreview() {
                 isLoading = false,
                 isRefreshing = false,
                 expenses = sampleExpenses,
+                currencyCode = "USD",
                 eventSink = noOpEventSink,
             ),
         )
@@ -107,6 +111,7 @@ fun ExpensesScreenWithDataDarkPreview() {
                 isLoading = false,
                 isRefreshing = false,
                 expenses = sampleExpenses,
+                currencyCode = "USD",
                 eventSink = noOpEventSink,
             ),
         )
@@ -125,6 +130,7 @@ fun ExpensesScreenSingleItemPreview() {
                 isLoading = false,
                 isRefreshing = false,
                 expenses = listOf(sampleExpenses.first()),
+                currencyCode = "USD",
                 eventSink = noOpEventSink,
             ),
         )
@@ -143,6 +149,7 @@ fun ExpensesScreenLargeFontPreview() {
                 isLoading = false,
                 isRefreshing = false,
                 expenses = sampleExpenses.take(2),
+                currencyCode = "USD",
                 eventSink = noOpEventSink,
             ),
         )
@@ -159,6 +166,7 @@ fun ExpensesScreenSmallFontPreview() {
                 isLoading = false,
                 isRefreshing = false,
                 expenses = sampleExpenses.take(2),
+                currencyCode = "USD",
                 eventSink = noOpEventSink,
             ),
         )
