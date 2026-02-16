@@ -30,7 +30,7 @@ android {
         minSdk = 33
         targetSdk = 36
         versionCode = 1
-        versionName = "1.0"
+        versionName = "0.0.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
@@ -42,15 +42,47 @@ android {
         )
     }
 
+    signingConfigs {
+        create("release") {
+            // Read from environment variables (CI) or local.properties (local dev)
+            storeFile = file(
+                System.getenv("KEYSTORE_PATH")
+                    ?: localProperties.getProperty("KEYSTORE_PATH", "release.keystore")
+            )
+            storePassword = System.getenv("KEYSTORE_PASSWORD")
+                ?: localProperties.getProperty("KEYSTORE_PASSWORD", "")
+            keyAlias = System.getenv("KEY_ALIAS")
+                ?: localProperties.getProperty("KEY_ALIAS", "")
+            keyPassword = System.getenv("KEY_PASSWORD")
+                ?: localProperties.getProperty("KEY_PASSWORD", "")
+        }
+    }
+
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            signingConfig = signingConfigs.getByName("release")
+        }
+        create("benchmark") {
+            initWith(getByName("release"))
+            signingConfig = signingConfigs.getByName("debug")
+            matchingFallbacks += listOf("release")
+            isDebuggable = false
+            isProfileable = true
         }
     }
+
+    lint {
+        // Metro DI injects Activities via AppComponentFactory, so they don't need
+        // a default no-arg constructor. Suppress this false positive.
+        disable += "Instantiatable"
+    }
+
     compileOptions {
         sourceCompatibility = JavaVersion.VERSION_21
         targetCompatibility = JavaVersion.VERSION_21
@@ -125,6 +157,9 @@ dependencies {
     // DateTime
     implementation(libs.kotlinx.datetime)
 
+    // Baseline Profiles
+    implementation(libs.androidx.profileinstaller)
+
     // Unit Testing
     testImplementation(libs.junit)
     testImplementation(libs.circuit.test)
@@ -141,5 +176,3 @@ dependencies {
     debugImplementation(libs.androidx.compose.ui.tooling)
     debugImplementation(libs.androidx.compose.ui.test.manifest)
 }
-
-

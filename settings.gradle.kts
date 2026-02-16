@@ -40,4 +40,7 @@ include(":feature:income")
 include(":feature:reports")
 include(":feature:settings")
 include(":feature:ai-chat")
+
+// Testing & Performance
+include(":benchmark")
  
