@@ -107,10 +107,12 @@ class ChatRepositoryImpl(
     private fun createWelcomeMessage(): ChatMessage = ChatMessage(
         id = "welcome",
         content = buildString {
-            appendLine("Hi! I'm your financial assistant. Ask me anything about your expenses, like:")
+            appendLine("Hi! I'm your financial assistant. Ask me anything about your finances, like:")
             appendLine()
             appendLine("• \"How much did I spend this month?\"")
             appendLine("• \"What's my biggest expense category?\"")
+            appendLine("• \"How much did I earn this month?\"")
+            appendLine("• \"Am I saving money?\"")
             appendLine("• \"Show me my recent expenses\"")
         },
         role = ChatRole.SYSTEM,

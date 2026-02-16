@@ -9,9 +9,14 @@ import ai.koog.prompt.executor.llms.SingleLLMPromptExecutor
 import ai.koog.prompt.executor.llms.all.simpleOpenAIExecutor
 import com.keisardev.insight.core.ai.config.AiConfig
 import com.keisardev.insight.core.ai.tools.ExpenseTools
+import com.keisardev.insight.core.ai.tools.FinancialSummaryTools
+import com.keisardev.insight.core.ai.tools.IncomeTools
 import com.keisardev.insight.core.common.di.AppScope
 import com.keisardev.insight.core.data.repository.CategoryRepository
 import com.keisardev.insight.core.data.repository.ExpenseRepository
+import com.keisardev.insight.core.data.repository.FinancialSummaryRepository
+import com.keisardev.insight.core.data.repository.IncomeCategoryRepository
+import com.keisardev.insight.core.data.repository.IncomeRepository
 import com.keisardev.insight.core.model.Category
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
@@ -35,6 +40,9 @@ class KoogAiService(
     private val aiConfig: AiConfig,
     private val expenseRepository: ExpenseRepository,
     private val categoryRepository: CategoryRepository,
+    private val incomeRepository: IncomeRepository,
+    private val incomeCategoryRepository: IncomeCategoryRepository,
+    private val financialSummaryRepository: FinancialSummaryRepository,
 ) : AiService {
 
     /**
@@ -51,6 +59,8 @@ class KoogAiService(
     private val chatToolRegistry: ToolRegistry by lazy {
         ToolRegistry {
             tools(ExpenseTools(expenseRepository, categoryRepository))
+            tools(IncomeTools(incomeRepository, incomeCategoryRepository))
+            tools(FinancialSummaryTools(financialSummaryRepository))
         }
     }
 
@@ -90,26 +100,35 @@ class KoogAiService(
             llmModel = OpenAIModels.Chat.GPT4oMini,
             strategy = chatAgentStrategy(),
             systemPrompt = """
-                You are a helpful financial assistant for an expense tracking app.
-                Your role is to help users understand their spending patterns and provide insights.
+                You are a helpful financial assistant for a personal finance tracking app.
+                Your role is to help users understand their spending patterns, income, and overall financial health.
 
                 Today's date is $today.
                 $historyContext
 
                 ## CRITICAL: Tool Selection Rules
 
-                When the user mentions a SPECIFIC ITEM or KEYWORD (like "pizza", "coffee", "uber", "groceries", "rent", etc.):
-                → ALWAYS use searchExpenses FIRST. It's case-insensitive and will find matches regardless of capitalization.
+                When the user mentions a SPECIFIC ITEM or KEYWORD (like "pizza", "coffee", "uber", "salary", etc.):
+                → Use searchExpenses for expense-related keywords, searchIncome for income-related keywords.
+                  These searches are case-insensitive and will find matches regardless of capitalization.
 
-                Examples requiring searchExpenses:
+                Examples:
                 - "How much did I spend on pizza?" → searchExpenses(keyword="pizza")
-                - "Show me my Coffee expenses" → searchExpenses(keyword="coffee")
-                - "Did I buy groceries?" → searchExpenses(keyword="groceries")
+                - "Show me my salary income" → searchIncome(keyword="salary")
+                - "Did I get any freelance income?" → searchIncome(keyword="freelance")
 
-                Use date-range tools (getTotalExpenses, getExpensesByCategory, getExpensesByDateRange) ONLY for:
-                - "How much did I spend this month?" → date range query
-                - "What are my expenses by category?" → category breakdown
-                - "Show me last week's expenses" → date range query
+                For OVERALL FINANCIAL HEALTH queries (income vs expenses, savings, net balance):
+                → Use getFinancialSummary. It gives income, expenses, net balance, savings rate, and breakdowns.
+
+                Examples:
+                - "Am I saving money?" → getFinancialSummary
+                - "What's my income vs expenses?" → getFinancialSummary
+                - "How am I doing financially?" → getFinancialSummary
+
+                Use date-range tools for period-specific queries:
+                - "How much did I spend this month?" → getTotalExpenses
+                - "How much did I earn this month?" → getTotalIncome
+                - "What are my expenses by category?" → getExpensesByCategory
 
                 ## Guidelines
                 - Be concise and helpful
@@ -118,12 +137,24 @@ class KoogAiService(
                 - If you don't have enough data, let the user know
 
                 ## Available Tools
-                - searchExpenses: Find expenses by keyword (case-insensitive) - USE THIS FOR ITEM QUERIES
+                ### Expense Tools
+                - searchExpenses: Find expenses by keyword (case-insensitive)
                 - getTotalExpenses: Get total spending for a date range
                 - getExpensesByCategory: Get spending breakdown by category
                 - getExpensesByDateRange: List expenses within dates
                 - getRecentExpenses: Get recent expense entries
-                - getCategories: List available categories
+                - getCategories: List available expense categories
+
+                ### Income Tools
+                - searchIncome: Find income by keyword (case-insensitive)
+                - getTotalIncome: Get total income for a date range
+                - getIncomeByCategory: Get income breakdown by category
+                - getIncomeByDateRange: List income within dates
+                - getRecentIncome: Get recent income entries
+                - getIncomeCategories: List available income categories
+
+                ### Financial Summary Tools
+                - getFinancialSummary: Get complete financial overview (income, expenses, net balance, savings rate)
             """.trimIndent(),
             toolRegistry = chatToolRegistry,
         )
