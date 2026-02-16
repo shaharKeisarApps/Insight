@@ -62,6 +62,7 @@ GoogleService-Info.plist
 test-results/
 **/test-results/
 screenshots/
+!docs/screenshots/
 paparazzi/out/
 **/snapshots/
 

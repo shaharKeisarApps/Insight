@@ -2,11 +2,10 @@ package com.keisardev.insight.di
 
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.text.BasicText
+import androidx.compose.material3.MaterialTheme
+import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
-import androidx.compose.ui.text.TextStyle
 import com.keisardev.insight.core.common.di.AppScope
 import com.slack.circuit.foundation.Circuit
 import com.slack.circuit.runtime.presenter.Presenter
@@ -26,9 +25,10 @@ interface CircuitModule {
             .addUiFactories(uiFactories)
             .setOnUnavailableContent { screen, modifier ->
                 Box(modifier = modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    BasicText(
+                    Text(
                         text = "Route not available: ${screen::class.simpleName}",
-                        style = TextStyle(color = Color.Yellow),
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = MaterialTheme.colorScheme.error,
                     )
                 }
             }

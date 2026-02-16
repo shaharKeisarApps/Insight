@@ -2,6 +2,7 @@ package com.keisardev.insight.feature.expenses
 
 import com.google.common.truth.Truth.assertThat
 import com.keisardev.insight.feature.expenses.fakes.FakeExpenseRepository
+import com.keisardev.insight.feature.expenses.fakes.FakeUserSettingsRepository
 import com.slack.circuit.test.FakeNavigator
 import com.slack.circuit.test.presenterTestOf
 import kotlinx.coroutines.test.runTest
@@ -25,11 +26,13 @@ import org.robolectric.annotation.Config
 class ExpensesPresenterTest {
 
     private lateinit var expenseRepository: FakeExpenseRepository
+    private lateinit var userSettingsRepository: FakeUserSettingsRepository
     private lateinit var navigator: FakeNavigator
 
     @Before
     fun setup() {
         expenseRepository = FakeExpenseRepository()
+        userSettingsRepository = FakeUserSettingsRepository()
         navigator = FakeNavigator(ExpensesScreen)
     }
 
@@ -40,6 +43,7 @@ class ExpensesPresenterTest {
                 ExpensesPresenter(
                     navigator = navigator,
                     expenseRepository = expenseRepository,
+                    userSettingsRepository = userSettingsRepository,
                 ).present()
             },
         ) {
@@ -58,6 +62,7 @@ class ExpensesPresenterTest {
                 ExpensesPresenter(
                     navigator = navigator,
                     expenseRepository = expenseRepository,
+                    userSettingsRepository = userSettingsRepository,
                 ).present()
             },
         ) {
@@ -76,6 +81,7 @@ class ExpensesPresenterTest {
                 ExpensesPresenter(
                     navigator = navigator,
                     expenseRepository = expenseRepository,
+                    userSettingsRepository = userSettingsRepository,
                 ).present()
             },
         ) {
@@ -99,6 +105,7 @@ class ExpensesPresenterTest {
                 ExpensesPresenter(
                     navigator = navigator,
                     expenseRepository = expenseRepository,
+                    userSettingsRepository = userSettingsRepository,
                 ).present()
             },
         ) {
@@ -123,6 +130,7 @@ class ExpensesPresenterTest {
                 ExpensesPresenter(
                     navigator = navigator,
                     expenseRepository = expenseRepository,
+                    userSettingsRepository = userSettingsRepository,
                 ).present()
             },
         ) {
@@ -155,6 +163,7 @@ class ExpensesPresenterTest {
                 ExpensesPresenter(
                     navigator = navigator,
                     expenseRepository = expenseRepository,
+                    userSettingsRepository = userSettingsRepository,
                 ).present()
             },
         ) {
@@ -176,6 +185,7 @@ class ExpensesPresenterTest {
                 ExpensesPresenter(
                     navigator = navigator,
                     expenseRepository = expenseRepository,
+                    userSettingsRepository = userSettingsRepository,
                 ).present()
             },
         ) {
@@ -204,6 +214,7 @@ class ExpensesPresenterTest {
                 ExpensesPresenter(
                     navigator = navigator,
                     expenseRepository = expenseRepository,
+                    userSettingsRepository = userSettingsRepository,
                 ).present()
             },
         ) {
