@@ -1,5 +1,6 @@
 plugins {
     alias(libs.plugins.insight.android.feature)
+    alias(libs.plugins.screenshot)
 }
 
 android {
@@ -10,6 +11,8 @@ android {
             isIncludeAndroidResources = true
         }
     }
+
+    experimentalProperties["android.experimental.enableScreenshotTest"] = true
 }
 
 dependencies {
@@ -21,4 +24,7 @@ dependencies {
     testImplementation(libs.kotlinx.coroutines.test)
     testImplementation(libs.circuit.test)
     testImplementation(libs.robolectric)
+
+    screenshotTestImplementation(libs.screenshot.validation.api)
+    screenshotTestImplementation(libs.androidx.compose.ui.tooling)
 }
