@@ -56,7 +56,6 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.Immutable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
@@ -98,7 +97,6 @@ import kotlinx.parcelize.Parcelize
 
 @Parcelize
 data object AiChatScreen : Screen {
-    @Immutable
     data class State(
         val messages: List<ChatMessage>,
         val inputText: String,
