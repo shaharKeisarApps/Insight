@@ -20,6 +20,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Category
+import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Cloud
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
@@ -28,8 +29,10 @@ import androidx.compose.material.icons.filled.SmartToy
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
+import androidx.compose.material3.ExperimentalMaterial3ExpressiveApi
 import androidx.compose.material3.HorizontalDivider
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LoadingIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.SegmentedButton
 import androidx.compose.material3.SegmentedButtonDefaults
@@ -49,13 +52,25 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.keisardev.insight.core.ai.model.ModelDownloadTrigger
+import com.keisardev.insight.core.ai.model.ModelRepository
 import com.keisardev.insight.core.ai.service.AiMode
 import com.keisardev.insight.core.ai.service.AiServiceStrategy
 import com.keisardev.insight.core.common.di.AppScope
+import com.keisardev.insight.core.data.datastore.UserSettings
+import com.keisardev.insight.core.data.datastore.UserSettingsRepository
 import com.keisardev.insight.core.data.repository.ExpenseRepository
 import com.keisardev.insight.core.data.repository.IncomeRepository
 import com.keisardev.insight.core.designsystem.theme.InsightTheme
+import com.keisardev.insight.core.model.ModelInfo
+import com.keisardev.insight.core.model.ModelState
+import com.keisardev.insight.core.ui.component.ModelSetupBanner
+import com.keisardev.insight.core.ui.component.ModelSetupBottomSheet
+import com.keisardev.insight.core.ui.util.AVAILABLE_CURRENCIES
+import com.keisardev.insight.core.ui.util.currencyDisplayName
+import com.keisardev.insight.core.ui.util.formatBytes
 import com.slack.circuit.codegen.annotations.CircuitInject
+import com.slack.circuit.retained.collectAsRetainedState
 import com.slack.circuit.retained.rememberRetained
 import com.slack.circuit.runtime.CircuitUiEvent
 import com.slack.circuit.runtime.CircuitUiState
@@ -72,6 +87,15 @@ data object SettingsScreen : Screen {
         val aiMode: AiMode,
         val isLocalModelAvailable: Boolean,
         val isCloudAvailable: Boolean,
+        val modelState: ModelState,
+        val showModelSetup: Boolean,
+        val availableModels: List<ModelInfo>,
+        val searchResults: List<ModelInfo>,
+        val isSearching: Boolean,
+        val searchQuery: String,
+        val showModelSelection: Boolean,
+        val currencyCode: String,
+        val showCurrencyPicker: Boolean,
         val eventSink: (Event) -> Unit,
     ) : CircuitUiState
 
@@ -80,6 +104,17 @@ data object SettingsScreen : Screen {
         data object OnClearDataConfirm : Event
         data object OnClearDataDismiss : Event
         data class OnAiModeChange(val mode: AiMode) : Event
+        data object OnShowModelSetup : Event
+        data object OnDismissModelSetup : Event
+        data class OnDownloadModel(val model: ModelInfo) : Event
+        data object OnCancelDownload : Event
+        data class OnSearchQueryChange(val query: String) : Event
+        data object OnSearch : Event
+        data object OnDeleteModel : Event
+        data object OnChangeModel : Event
+        data object OnCurrencyClick : Event
+        data class OnCurrencySelect(val currencyCode: String) : Event
+        data object OnDismissCurrencyPicker : Event
     }
 }
 
@@ -89,12 +124,28 @@ class SettingsPresenter(
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
     private val aiServiceStrategy: AiServiceStrategy,
+    private val modelRepository: ModelRepository,
+    private val modelDownloadTrigger: ModelDownloadTrigger,
+    private val userSettingsRepository: UserSettingsRepository,
 ) : Presenter<SettingsScreen.State> {
 
     @Composable
     override fun present(): SettingsScreen.State {
         var showConfirmation by rememberRetained { mutableStateOf(false) }
-        var aiMode by rememberRetained { mutableStateOf(aiServiceStrategy.mode) }
+        var showModelSetup by rememberRetained { mutableStateOf(false) }
+        var showModelSelection by rememberRetained { mutableStateOf(false) }
+        var showCurrencyPicker by rememberRetained { mutableStateOf(false) }
+        var searchQuery by rememberRetained { mutableStateOf("") }
+        val aiMode by aiServiceStrategy.observeAiMode()
+            .collectAsRetainedState(initial = aiServiceStrategy.mode)
+        val modelState by modelRepository.modelState
+            .collectAsRetainedState(initial = ModelState.NotInstalled)
+        val searchResults by modelRepository.searchResults
+            .collectAsRetainedState(initial = emptyList())
+        val isSearching by modelRepository.isSearching
+            .collectAsRetainedState(initial = false)
+        val settings by userSettingsRepository.observeSettings()
+            .collectAsRetainedState(initial = UserSettings())
         val scope = rememberCoroutineScope()
 
         return SettingsScreen.State(
@@ -102,6 +153,15 @@ class SettingsPresenter(
             aiMode = aiMode,
             isLocalModelAvailable = aiServiceStrategy.isLocalAvailable,
             isCloudAvailable = aiServiceStrategy.isCloudAvailable,
+            modelState = modelState,
+            showModelSetup = showModelSetup,
+            availableModels = modelRepository.availableModels,
+            searchResults = searchResults,
+            isSearching = isSearching,
+            searchQuery = searchQuery,
+            showModelSelection = showModelSelection,
+            currencyCode = settings.currencyCode,
+            showCurrencyPicker = showCurrencyPicker,
         ) { event ->
             when (event) {
                 SettingsScreen.Event.OnClearDataClick -> {
@@ -118,8 +178,56 @@ class SettingsPresenter(
                     showConfirmation = false
                 }
                 is SettingsScreen.Event.OnAiModeChange -> {
-                    aiMode = event.mode
-                    aiServiceStrategy.mode = event.mode
+                    scope.launch {
+                        aiServiceStrategy.setMode(event.mode)
+                    }
+                }
+                SettingsScreen.Event.OnShowModelSetup -> {
+                    showModelSetup = true
+                }
+                SettingsScreen.Event.OnDismissModelSetup -> {
+                    showModelSetup = false
+                    showModelSelection = false
+                    searchQuery = ""
+                }
+                is SettingsScreen.Event.OnDownloadModel -> {
+                    modelDownloadTrigger.startDownloadService()
+                    showModelSelection = false
+                    scope.launch {
+                        modelRepository.startDownload(event.model)
+                    }
+                }
+                SettingsScreen.Event.OnCancelDownload -> {
+                    modelRepository.cancelDownload()
+                    modelDownloadTrigger.stopDownloadService()
+                }
+                is SettingsScreen.Event.OnSearchQueryChange -> {
+                    searchQuery = event.query
+                }
+                SettingsScreen.Event.OnSearch -> {
+                    scope.launch {
+                        modelRepository.searchModels(searchQuery)
+                    }
+                }
+                SettingsScreen.Event.OnDeleteModel -> {
+                    scope.launch {
+                        modelRepository.deleteCurrentModel()
+                    }
+                }
+                SettingsScreen.Event.OnChangeModel -> {
+                    showModelSelection = true
+                }
+                SettingsScreen.Event.OnCurrencyClick -> {
+                    showCurrencyPicker = true
+                }
+                is SettingsScreen.Event.OnCurrencySelect -> {
+                    scope.launch {
+                        userSettingsRepository.updateCurrency(event.currencyCode)
+                    }
+                    showCurrencyPicker = false
+                }
+                SettingsScreen.Event.OnDismissCurrencyPicker -> {
+                    showCurrencyPicker = false
                 }
             }
         }
@@ -161,12 +269,8 @@ fun SettingsUi(state: SettingsScreen.State, modifier: Modifier = Modifier) {
                     SettingsItem(
                         icon = Icons.Default.AttachMoney,
                         title = "Currency",
-                        subtitle = "USD ($)",
-                        onClick = {
-                            scope.launch {
-                                snackbarHostState.showSnackbar("Coming soon")
-                            }
-                        },
+                        subtitle = currencyDisplayName(state.currencyCode),
+                        onClick = { state.eventSink(SettingsScreen.Event.OnCurrencyClick) },
                     )
                 }
             }
@@ -177,8 +281,18 @@ fun SettingsUi(state: SettingsScreen.State, modifier: Modifier = Modifier) {
                 aiMode = state.aiMode,
                 isLocalAvailable = state.isLocalModelAvailable,
                 isCloudAvailable = state.isCloudAvailable,
+                modelState = state.modelState,
                 onModeChange = { state.eventSink(SettingsScreen.Event.OnAiModeChange(it)) },
+                onManageModel = { state.eventSink(SettingsScreen.Event.OnShowModelSetup) },
             )
+
+            // Model setup banner — show when no local model and not in cloud-only mode
+            if (state.modelState is ModelState.NotInstalled && state.aiMode != AiMode.CLOUD) {
+                Spacer(modifier = Modifier.height(12.dp))
+                ModelSetupBanner(
+                    onClick = { state.eventSink(SettingsScreen.Event.OnShowModelSetup) },
+                )
+            }
 
             Spacer(modifier = Modifier.height(16.dp))
 
@@ -242,14 +356,85 @@ fun SettingsUi(state: SettingsScreen.State, modifier: Modifier = Modifier) {
             },
         )
     }
+
+    // Currency picker dialog
+    if (state.showCurrencyPicker) {
+        AlertDialog(
+            onDismissRequest = { state.eventSink(SettingsScreen.Event.OnDismissCurrencyPicker) },
+            title = { Text("Select Currency") },
+            text = {
+                Column {
+                    AVAILABLE_CURRENCIES.forEach { code ->
+                        Row(
+                            modifier = Modifier
+                                .fillMaxWidth()
+                                .clickable {
+                                    state.eventSink(SettingsScreen.Event.OnCurrencySelect(code))
+                                }
+                                .padding(vertical = 12.dp, horizontal = 8.dp),
+                            verticalAlignment = Alignment.CenterVertically,
+                        ) {
+                            Text(
+                                text = currencyDisplayName(code),
+                                style = MaterialTheme.typography.bodyLarge,
+                                color = if (code == state.currencyCode) {
+                                    MaterialTheme.colorScheme.primary
+                                } else {
+                                    MaterialTheme.colorScheme.onSurface
+                                },
+                                modifier = Modifier.weight(1f),
+                            )
+                            if (code == state.currencyCode) {
+                                Icon(
+                                    imageVector = Icons.Default.Check,
+                                    contentDescription = "Selected",
+                                    tint = MaterialTheme.colorScheme.primary,
+                                    modifier = Modifier.size(20.dp),
+                                )
+                            }
+                        }
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    onClick = { state.eventSink(SettingsScreen.Event.OnDismissCurrencyPicker) },
+                ) {
+                    Text("Cancel")
+                }
+            },
+        )
+    }
+
+    // Model setup bottom sheet
+    if (state.showModelSetup || state.modelState is ModelState.Downloading) {
+        ModelSetupBottomSheet(
+            modelState = state.modelState,
+            availableModels = state.availableModels,
+            searchResults = state.searchResults,
+            isSearching = state.isSearching,
+            searchQuery = state.searchQuery,
+            showModelSelection = state.showModelSelection,
+            onDismiss = { state.eventSink(SettingsScreen.Event.OnDismissModelSetup) },
+            onDownload = { state.eventSink(SettingsScreen.Event.OnDownloadModel(it)) },
+            onCancel = { state.eventSink(SettingsScreen.Event.OnCancelDownload) },
+            onSearchQueryChange = { state.eventSink(SettingsScreen.Event.OnSearchQueryChange(it)) },
+            onSearch = { state.eventSink(SettingsScreen.Event.OnSearch) },
+            onDeleteModel = { state.eventSink(SettingsScreen.Event.OnDeleteModel) },
+            onChangeModel = { state.eventSink(SettingsScreen.Event.OnChangeModel) },
+        )
+    }
 }
 
+@OptIn(ExperimentalMaterial3ExpressiveApi::class)
 @Composable
 private fun AiEngineCard(
     aiMode: AiMode,
     isLocalAvailable: Boolean,
     isCloudAvailable: Boolean,
+    modelState: ModelState,
     onModeChange: (AiMode) -> Unit,
+    onManageModel: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Card(
@@ -315,45 +500,88 @@ private fun AiEngineCard(
                 }
             }
 
+            // Inline wave loading indicator for download progress
+            if (modelState is ModelState.Downloading) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                ) {
+                    LoadingIndicator(
+                        modifier = Modifier.size(24.dp),
+                        color = MaterialTheme.colorScheme.primary,
+                    )
+                    Text(
+                        text = "Downloading model... ${(modelState.progress * 100).toInt()}%",
+                        style = MaterialTheme.typography.bodySmall,
+                        color = MaterialTheme.colorScheme.onSurfaceVariant,
+                    )
+                }
+            }
+
             // Status description
-            val statusText = when (aiMode) {
-                AiMode.LOCAL -> if (isLocalAvailable) {
-                    "Using on-device model — no internet needed"
-                } else {
-                    "No local model installed — place a .gguf file in models/"
-                }
-                AiMode.CLOUD -> if (isCloudAvailable) {
-                    "Using OpenAI cloud API"
-                } else {
-                    "Cloud API not configured — add API key to local.properties"
-                }
-                AiMode.AUTO -> when {
-                    isLocalAvailable -> "On-device model active — cloud as fallback"
-                    isCloudAvailable -> "Cloud API active — no local model found"
-                    else -> "No AI backend available"
-                }
-            }
-
-            val isWarning = when (aiMode) {
-                AiMode.LOCAL -> !isLocalAvailable
-                AiMode.CLOUD -> !isCloudAvailable
-                AiMode.AUTO -> !isLocalAvailable && !isCloudAvailable
-            }
-
-            AnimatedVisibility(
-                visible = true,
-                enter = fadeIn() + expandVertically(),
-                exit = fadeOut() + shrinkVertically(),
-            ) {
-                Text(
-                    text = statusText,
-                    style = MaterialTheme.typography.bodySmall,
-                    color = if (isWarning) {
-                        MaterialTheme.colorScheme.error
+            val statusText = when (modelState) {
+                is ModelState.Downloading -> null // Already shown above
+                is ModelState.Ready -> when (aiMode) {
+                    AiMode.LOCAL -> "On-device model ready \u2014 ${modelState.modelName}"
+                    AiMode.CLOUD -> if (isCloudAvailable) {
+                        "Using OpenAI cloud API"
                     } else {
-                        MaterialTheme.colorScheme.onSurfaceVariant
-                    },
-                )
+                        "Cloud API not configured \u2014 add API key to local.properties"
+                    }
+                    AiMode.AUTO -> "On-device model ready \u2014 cloud as fallback"
+                }
+                is ModelState.Error -> "Download failed: ${modelState.message}"
+                else -> when (aiMode) {
+                    AiMode.LOCAL -> if (isLocalAvailable) {
+                        "Using on-device model \u2014 no internet needed"
+                    } else {
+                        "No local model \u2014 download one from AI Chat"
+                    }
+                    AiMode.CLOUD -> if (isCloudAvailable) {
+                        "Using OpenAI cloud API"
+                    } else {
+                        "Cloud API not configured \u2014 add API key to local.properties"
+                    }
+                    AiMode.AUTO -> when {
+                        isLocalAvailable -> "On-device model active \u2014 cloud as fallback"
+                        isCloudAvailable -> "Cloud API active \u2014 no local model found"
+                        else -> "No AI backend available"
+                    }
+                }
+            }
+
+            val isWarning = when {
+                modelState is ModelState.Error -> true
+                modelState is ModelState.Downloading -> false
+                aiMode == AiMode.LOCAL -> !isLocalAvailable
+                aiMode == AiMode.CLOUD -> !isCloudAvailable
+                aiMode == AiMode.AUTO -> !isLocalAvailable && !isCloudAvailable
+                else -> false
+            }
+
+            if (statusText != null) {
+                AnimatedVisibility(
+                    visible = true,
+                    enter = fadeIn() + expandVertically(),
+                    exit = fadeOut() + shrinkVertically(),
+                ) {
+                    Text(
+                        text = statusText,
+                        style = MaterialTheme.typography.bodySmall,
+                        color = if (isWarning) {
+                            MaterialTheme.colorScheme.error
+                        } else {
+                            MaterialTheme.colorScheme.onSurfaceVariant
+                        },
+                    )
+                }
+            }
+
+            // Manage model button when model is ready
+            if (modelState is ModelState.Ready) {
+                TextButton(onClick = onManageModel) {
+                    Text("Manage Model")
+                }
             }
         }
     }
@@ -420,6 +648,19 @@ private fun PreviewSettingsUi() {
                 aiMode = AiMode.AUTO,
                 isLocalModelAvailable = true,
                 isCloudAvailable = true,
+                modelState = ModelState.Ready(
+                    modelName = "SmolLM2 360M",
+                    filePath = "",
+                    sizeBytes = 387_000_000L,
+                ),
+                showModelSetup = false,
+                availableModels = emptyList(),
+                searchResults = emptyList(),
+                isSearching = false,
+                searchQuery = "",
+                showModelSelection = false,
+                currencyCode = "USD",
+                showCurrencyPicker = false,
                 eventSink = {},
             )
         )
@@ -436,6 +677,15 @@ private fun PreviewSettingsUiWithDialog() {
                 aiMode = AiMode.CLOUD,
                 isLocalModelAvailable = false,
                 isCloudAvailable = true,
+                modelState = ModelState.NotInstalled,
+                showModelSetup = false,
+                availableModels = emptyList(),
+                searchResults = emptyList(),
+                isSearching = false,
+                searchQuery = "",
+                showModelSelection = false,
+                currencyCode = "USD",
+                showCurrencyPicker = false,
                 eventSink = {},
             )
         )

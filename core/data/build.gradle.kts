@@ -1,6 +1,7 @@
 plugins {
     alias(libs.plugins.insight.android.library)
     alias(libs.plugins.metro)
+    alias(libs.plugins.kotlin.serialization)
 }
 
 android {
@@ -13,4 +14,6 @@ dependencies {
     implementation(project(":core:database"))
     implementation(libs.kotlinx.coroutines.android)
     implementation(libs.sqldelight.coroutines)
+    api(libs.androidx.datastore)
+    implementation(libs.kotlinx.serialization.json)
 }

@@ -1,10 +1,14 @@
 package com.keisardev.insight.core.ai.service
 
 import com.keisardev.insight.core.common.di.AppScope
+import com.keisardev.insight.core.data.datastore.UserSettings
+import com.keisardev.insight.core.data.datastore.UserSettingsRepository
 import com.keisardev.insight.core.model.Category
 import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.map
 
 /**
  * Selects which AI backend to use: on-device (Llamatik) or cloud (Koog/OpenAI).
@@ -22,7 +26,7 @@ enum class AiMode {
  * Strategy that delegates to [LlamatikAiService] or [KoogAiService]
  * based on the selected [AiMode] and model availability.
  *
- * Defaults to [AiMode.AUTO]: prefers on-device inference, falls back to cloud.
+ * The mode is persisted via Proto DataStore and survives app restarts.
  */
 @ContributesBinding(AppScope::class)
 @SingleIn(AppScope::class)
@@ -30,6 +34,7 @@ enum class AiMode {
 class AiServiceStrategy(
     private val llamatikAiService: LlamatikAiService,
     private val koogAiService: KoogAiService,
+    private val userSettingsRepository: UserSettingsRepository,
 ) : AiService {
 
     var mode: AiMode = AiMode.AUTO
@@ -39,6 +44,14 @@ class AiServiceStrategy(
 
     val isCloudAvailable: Boolean
         get() = koogAiService.isEnabled
+
+    fun observeAiMode(): Flow<AiMode> =
+        userSettingsRepository.observeSettings().map { it.aiMode.toAiMode() }
+
+    suspend fun setMode(newMode: AiMode) {
+        mode = newMode
+        userSettingsRepository.updateAiMode(newMode.toProto())
+    }
 
     private val activeService: AiService
         get() = when (mode) {
@@ -59,4 +72,16 @@ class AiServiceStrategy(
         message: String,
         history: List<ChatMessage>,
     ): String = activeService.chat(message, history)
+}
+
+private fun UserSettings.AiModeProto.toAiMode(): AiMode = when (this) {
+    UserSettings.AiModeProto.LOCAL -> AiMode.LOCAL
+    UserSettings.AiModeProto.CLOUD -> AiMode.CLOUD
+    UserSettings.AiModeProto.AUTO -> AiMode.AUTO
+}
+
+private fun AiMode.toProto(): UserSettings.AiModeProto = when (this) {
+    AiMode.LOCAL -> UserSettings.AiModeProto.LOCAL
+    AiMode.CLOUD -> UserSettings.AiModeProto.CLOUD
+    AiMode.AUTO -> UserSettings.AiModeProto.AUTO
 }

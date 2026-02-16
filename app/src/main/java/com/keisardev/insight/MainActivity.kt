@@ -20,10 +20,13 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.material3.adaptive.navigationsuite.NavigationSuiteScaffold
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.derivedStateOf
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalLayoutDirection
+import androidx.compose.ui.unit.LayoutDirection
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.semantics.semantics
@@ -72,9 +75,11 @@ class MainActivity(
                 ) { darkTheme },
             )
 
-            InsightTheme(darkTheme = darkTheme) {
-                CircuitCompositionLocals(circuit) {
-                    MainContent()
+            CompositionLocalProvider(LocalLayoutDirection provides LayoutDirection.Ltr) {
+                InsightTheme(darkTheme = darkTheme) {
+                    CircuitCompositionLocals(circuit) {
+                        MainContent()
+                    }
                 }
             }
         }

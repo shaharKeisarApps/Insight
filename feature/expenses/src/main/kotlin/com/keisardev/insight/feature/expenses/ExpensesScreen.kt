@@ -50,6 +50,8 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import com.keisardev.insight.core.common.di.AppScope
+import com.keisardev.insight.core.data.datastore.UserSettings
+import com.keisardev.insight.core.data.datastore.UserSettingsRepository
 import com.keisardev.insight.core.data.repository.ExpenseRepository
 import com.keisardev.insight.core.designsystem.theme.InsightTheme
 import com.keisardev.insight.core.model.Category
@@ -81,6 +83,7 @@ data object ExpensesScreen : Screen {
         val isLoading: Boolean,
         val isRefreshing: Boolean,
         val expenses: List<Expense>,
+        val currencyCode: String,
         val eventSink: (Event) -> Unit,
     ) : CircuitUiState
 
@@ -95,11 +98,14 @@ data object ExpensesScreen : Screen {
 class ExpensesPresenter(
     @Assisted private val navigator: Navigator,
     private val expenseRepository: ExpenseRepository,
+    private val userSettingsRepository: UserSettingsRepository,
 ) : Presenter<ExpensesScreen.State> {
 
     @Composable
     override fun present(): ExpensesScreen.State {
         val expenses by expenseRepository.observeAllExpenses().collectAsRetainedState(initial = emptyList())
+        val settings by userSettingsRepository.observeSettings()
+            .collectAsRetainedState(initial = UserSettings())
         var isRefreshing by rememberRetained { mutableStateOf(false) }
         val scope = rememberCoroutineScope()
 
@@ -107,6 +113,7 @@ class ExpensesPresenter(
             isLoading = false,
             isRefreshing = isRefreshing,
             expenses = expenses,
+            currencyCode = settings.currencyCode,
         ) { event ->
             when (event) {
                 ExpensesScreen.Event.OnAddClick -> {
@@ -205,6 +212,7 @@ fun ExpensesUi(state: ExpensesScreen.State, modifier: Modifier = Modifier) {
                 ) {
                     ExpensesList(
                         expenses = state.expenses,
+                        currencyCode = state.currencyCode,
                         onExpenseClick = { state.eventSink(ExpensesScreen.Event.OnExpenseClick(it)) },
                         listState = listState,
                         modifier = Modifier.fillMaxSize(),
@@ -218,6 +226,7 @@ fun ExpensesUi(state: ExpensesScreen.State, modifier: Modifier = Modifier) {
 @Composable
 private fun ExpensesList(
     expenses: List<Expense>,
+    currencyCode: String,
     onExpenseClick: (Long) -> Unit,
     listState: androidx.compose.foundation.lazy.LazyListState,
     modifier: Modifier = Modifier,
@@ -238,6 +247,7 @@ private fun ExpensesList(
             ) {
                 ExpenseItem(
                     expense = expense,
+                    currencyCode = currencyCode,
                     onClick = { onExpenseClick(expense.id) },
                 )
             }
@@ -248,6 +258,7 @@ private fun ExpensesList(
 @Composable
 private fun ExpenseItem(
     expense: Expense,
+    currencyCode: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -287,7 +298,7 @@ private fun ExpenseItem(
                 horizontalAlignment = Alignment.End,
             ) {
                 Text(
-                    text = formatCurrency(expense.amount),
+                    text = formatCurrency(expense.amount, currencyCode),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.primary,
@@ -312,6 +323,7 @@ private fun PreviewExpensesUiEmpty() {
                 isLoading = false,
                 isRefreshing = false,
                 expenses = emptyList(),
+                currencyCode = "USD",
                 eventSink = {},
             )
         )
@@ -350,6 +362,7 @@ private fun PreviewExpensesUiWithData() {
                         createdAt = Clock.System.now(),
                     ),
                 ),
+                currencyCode = "USD",
                 eventSink = {},
             )
         )

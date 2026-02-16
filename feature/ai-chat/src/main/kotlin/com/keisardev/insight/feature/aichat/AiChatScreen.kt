@@ -29,6 +29,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.WindowInsets
+import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.ime
 import androidx.compose.foundation.layout.navigationBars
 import androidx.compose.ui.platform.LocalDensity
@@ -68,11 +69,16 @@ import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import com.keisardev.insight.core.ai.model.ModelDownloadTrigger
+import com.keisardev.insight.core.ai.model.ModelRepository
 import com.keisardev.insight.core.ai.repository.ChatRepository
 import com.keisardev.insight.core.common.di.AppScope
 import com.keisardev.insight.core.designsystem.theme.InsightTheme
 import com.keisardev.insight.core.model.ChatMessage
 import com.keisardev.insight.core.model.ChatRole
+import com.keisardev.insight.core.model.ModelInfo
+import com.keisardev.insight.core.model.ModelState
+import com.keisardev.insight.core.ui.component.ModelSetupBottomSheet
 import com.slack.circuit.codegen.annotations.CircuitInject
 import com.slack.circuit.retained.collectAsRetainedState
 import com.slack.circuit.retained.rememberRetained
@@ -98,52 +104,82 @@ data object AiChatScreen : Screen {
         val inputText: String,
         val isLoading: Boolean,
         val isAiEnabled: Boolean,
+        val showModelSetup: Boolean,
+        val modelState: ModelState,
+        val availableModels: List<ModelInfo>,
+        val searchResults: List<ModelInfo>,
+        val isSearching: Boolean,
+        val searchQuery: String,
+        val showModelSelection: Boolean,
         val eventSink: (Event) -> Unit,
     ) : CircuitUiState
 
     sealed interface Event : CircuitUiEvent {
         data class OnInputChange(val text: String) : Event
         data object OnSend : Event
+        data class OnDownloadModel(val model: ModelInfo) : Event
+        data object OnCancelDownload : Event
+        data object OnDismissModelSetup : Event
+        data class OnSearchQueryChange(val query: String) : Event
+        data object OnSearch : Event
+        data object OnDeleteModel : Event
+        data object OnChangeModel : Event
     }
 }
 
-/**
- * Presenter for the AI Chat screen.
- *
- * Uses [ChatRepository] to manage chat state and AI interactions,
- * following the same patterns as other features in the app.
- */
 @AssistedInject
 class AiChatPresenter(
     @Assisted private val navigator: Navigator,
     private val chatRepository: ChatRepository,
+    private val modelRepository: ModelRepository,
+    private val modelDownloadTrigger: ModelDownloadTrigger,
 ) : Presenter<AiChatScreen.State> {
 
     @Composable
     override fun present(): AiChatScreen.State {
-        // Observe messages from repository (reactive, consistent with other features)
         val messages by chatRepository.observeMessages()
             .collectAsRetainedState(initial = emptyList())
 
-        // Observe loading state from repository
         val isLoading by chatRepository.isLoading
             .collectAsRetainedState(initial = false)
 
+        val modelState by modelRepository.modelState
+            .collectAsRetainedState(initial = ModelState.NotInstalled)
+
+        val searchResults by modelRepository.searchResults
+            .collectAsRetainedState(initial = emptyList())
+
+        val isSearching by modelRepository.isSearching
+            .collectAsRetainedState(initial = false)
+
         var inputText by rememberRetained { mutableStateOf("") }
+        var dismissedSetup by rememberRetained { mutableStateOf(false) }
+        var showModelSelection by rememberRetained { mutableStateOf(false) }
+        var searchQuery by rememberRetained { mutableStateOf("") }
         val scope = rememberCoroutineScope()
 
-        // Initialize with welcome message on first load
         LaunchedEffect(Unit) {
             if (messages.isEmpty() && chatRepository.isEnabled) {
                 chatRepository.clearHistory(addWelcomeMessage = true)
             }
         }
 
+        val showModelSetup = !dismissedSetup &&
+            !chatRepository.isEnabled &&
+            modelState is ModelState.NotInstalled
+
         return AiChatScreen.State(
             messages = messages,
             inputText = inputText,
             isLoading = isLoading,
             isAiEnabled = chatRepository.isEnabled,
+            showModelSetup = showModelSetup,
+            modelState = modelState,
+            availableModels = modelRepository.availableModels,
+            searchResults = searchResults,
+            isSearching = isSearching,
+            searchQuery = searchQuery,
+            showModelSelection = showModelSelection,
         ) { event ->
             when (event) {
                 is AiChatScreen.Event.OnInputChange -> inputText = event.text
@@ -151,11 +187,42 @@ class AiChatPresenter(
                     if (inputText.isNotBlank() && !isLoading) {
                         val messageToSend = inputText.trim()
                         inputText = ""
-
                         scope.launch {
                             chatRepository.sendMessage(messageToSend)
                         }
                     }
+                }
+                is AiChatScreen.Event.OnDownloadModel -> {
+                    modelDownloadTrigger.startDownloadService()
+                    showModelSelection = false
+                    scope.launch {
+                        modelRepository.startDownload(event.model)
+                    }
+                }
+                AiChatScreen.Event.OnCancelDownload -> {
+                    modelRepository.cancelDownload()
+                    modelDownloadTrigger.stopDownloadService()
+                }
+                AiChatScreen.Event.OnDismissModelSetup -> {
+                    dismissedSetup = true
+                    showModelSelection = false
+                    searchQuery = ""
+                }
+                is AiChatScreen.Event.OnSearchQueryChange -> {
+                    searchQuery = event.query
+                }
+                AiChatScreen.Event.OnSearch -> {
+                    scope.launch {
+                        modelRepository.searchModels(searchQuery)
+                    }
+                }
+                AiChatScreen.Event.OnDeleteModel -> {
+                    scope.launch {
+                        modelRepository.deleteCurrentModel()
+                    }
+                }
+                AiChatScreen.Event.OnChangeModel -> {
+                    showModelSelection = true
                 }
             }
         }
@@ -171,10 +238,6 @@ class AiChatPresenter(
 @CircuitInject(AiChatScreen::class, AppScope::class)
 @Composable
 fun AiChatUi(state: AiChatScreen.State, modifier: Modifier = Modifier) {
-    // Calculate effective IME padding that accounts for NavigationSuiteScaffold.
-    // imePadding() measures from the window bottom, but our content sits above the app's
-    // NavigationBar (80dp) + system nav bar. Without this correction, the text field
-    // gets pushed too far up, creating a visible gap above the keyboard.
     val density = LocalDensity.current
     val imeBottom = WindowInsets.ime.getBottom(density)
     val navBarBottom = WindowInsets.navigationBars.getBottom(density)
@@ -186,7 +249,6 @@ fun AiChatUi(state: AiChatScreen.State, modifier: Modifier = Modifier) {
     Scaffold(
         modifier = modifier.fillMaxSize(),
         bottomBar = {
-            // Only show input when AI is enabled
             if (state.isAiEnabled) {
                 Surface(
                     modifier = Modifier
@@ -210,8 +272,6 @@ fun AiChatUi(state: AiChatScreen.State, modifier: Modifier = Modifier) {
         if (!state.isAiEnabled) {
             AiDisabledContent(modifier = Modifier.padding(paddingValues))
         } else {
-            // Messages list fills available space
-            // Scaffold automatically provides padding for bottomBar
             ChatMessagesList(
                 messages = state.messages,
                 isLoading = state.isLoading,
@@ -220,6 +280,25 @@ fun AiChatUi(state: AiChatScreen.State, modifier: Modifier = Modifier) {
                     .padding(paddingValues),
             )
         }
+    }
+
+    // Model setup bottom sheet
+    if (state.showModelSetup || state.modelState is ModelState.Downloading) {
+        ModelSetupBottomSheet(
+            modelState = state.modelState,
+            availableModels = state.availableModels,
+            searchResults = state.searchResults,
+            isSearching = state.isSearching,
+            searchQuery = state.searchQuery,
+            showModelSelection = state.showModelSelection,
+            onDismiss = { state.eventSink(AiChatScreen.Event.OnDismissModelSetup) },
+            onDownload = { state.eventSink(AiChatScreen.Event.OnDownloadModel(it)) },
+            onCancel = { state.eventSink(AiChatScreen.Event.OnCancelDownload) },
+            onSearchQueryChange = { state.eventSink(AiChatScreen.Event.OnSearchQueryChange(it)) },
+            onSearch = { state.eventSink(AiChatScreen.Event.OnSearch) },
+            onDeleteModel = { state.eventSink(AiChatScreen.Event.OnDeleteModel) },
+            onChangeModel = { state.eventSink(AiChatScreen.Event.OnChangeModel) },
+        )
     }
 }
 
@@ -270,7 +349,6 @@ private fun ChatMessagesList(
 ) {
     val listState = rememberLazyListState()
 
-    // Auto-scroll to bottom when new messages arrive
     LaunchedEffect(messages.size) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
@@ -287,7 +365,6 @@ private fun ChatMessagesList(
             AnimatedVisibility(
                 visible = true,
                 enter = if (message.isUser) {
-                    // User messages: animate from input field position (bottom) with scale
                     fadeIn(animationSpec = tween(200)) +
                     slideInVertically(
                         initialOffsetY = { fullHeight -> fullHeight },
@@ -304,7 +381,6 @@ private fun ChatMessagesList(
                         )
                     )
                 } else {
-                    // AI messages: gentle slide from top
                     fadeIn(animationSpec = tween(300)) +
                     slideInVertically(
                         initialOffsetY = { fullHeight -> -fullHeight / 3 },
@@ -322,7 +398,7 @@ private fun ChatMessagesList(
 
         if (isLoading) {
             item {
-                LoadingIndicator()
+                TypingIndicator()
             }
         }
     }
@@ -390,7 +466,6 @@ private fun ChatMessageItem(
             }
         }
 
-        // Timestamp
         Text(
             text = formatMessageTime(message.timestamp),
             style = MaterialTheme.typography.labelSmall,
@@ -419,7 +494,7 @@ private fun formatMessageTime(timestamp: kotlinx.datetime.Instant): String {
 }
 
 @Composable
-private fun LoadingIndicator(modifier: Modifier = Modifier) {
+private fun TypingIndicator(modifier: Modifier = Modifier) {
     Row(
         modifier = modifier,
         horizontalArrangement = Arrangement.Start,
@@ -449,7 +524,6 @@ private fun LoadingIndicator(modifier: Modifier = Modifier) {
                 verticalAlignment = Alignment.CenterVertically,
                 horizontalArrangement = Arrangement.spacedBy(6.dp),
             ) {
-                // Animated bouncing dots
                 repeat(3) { index ->
                     val infiniteTransition = rememberInfiniteTransition(
                         label = "typing_dot_$index"
@@ -577,6 +651,13 @@ private fun PreviewAiChatUi() {
                 inputText = "",
                 isLoading = false,
                 isAiEnabled = true,
+                showModelSetup = false,
+                modelState = ModelState.NotInstalled,
+                availableModels = emptyList(),
+                searchResults = emptyList(),
+                isSearching = false,
+                searchQuery = "",
+                showModelSelection = false,
                 eventSink = {},
             )
         )
@@ -593,6 +674,13 @@ private fun PreviewAiChatUiDisabled() {
                 inputText = "",
                 isLoading = false,
                 isAiEnabled = false,
+                showModelSetup = false,
+                modelState = ModelState.NotInstalled,
+                availableModels = emptyList(),
+                searchResults = emptyList(),
+                isSearching = false,
+                searchQuery = "",
+                showModelSelection = false,
                 eventSink = {},
             )
         )

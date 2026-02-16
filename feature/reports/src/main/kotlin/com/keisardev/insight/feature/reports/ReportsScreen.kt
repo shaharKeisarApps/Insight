@@ -53,6 +53,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.keisardev.insight.core.common.di.AppScope
+import com.keisardev.insight.core.data.datastore.UserSettings
+import com.keisardev.insight.core.data.datastore.UserSettingsRepository
 import com.keisardev.insight.core.data.repository.ExpenseRepository
 import com.keisardev.insight.core.data.repository.FinancialSummaryRepository
 import com.keisardev.insight.core.data.repository.IncomeRepository
@@ -93,6 +95,7 @@ data object ReportsScreen : Screen {
         val categoryBreakdown: List<CategorySpending>,
         val incomeCategoryBreakdown: List<IncomeCategorySpending>,
         val financialSummary: FinancialSummary,
+        val currencyCode: String,
         val eventSink: (Event) -> Unit,
     ) : CircuitUiState
 
@@ -121,6 +124,7 @@ class ReportsPresenter(
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
     private val financialSummaryRepository: FinancialSummaryRepository,
+    private val userSettingsRepository: UserSettingsRepository,
 ) : Presenter<ReportsScreen.State> {
 
     @Composable
@@ -129,6 +133,9 @@ class ReportsPresenter(
         var selectedMonth by rememberRetained { mutableStateOf(now.month) }
         var selectedYear by rememberRetained { mutableStateOf(now.year) }
         var selectedViewType by rememberRetained { mutableStateOf(ReportViewType.SPENDING) }
+
+        val settings by userSettingsRepository.observeSettings()
+            .collectAsRetainedState(initial = UserSettings())
 
         val startDate = LocalDate(selectedYear, selectedMonth, 1)
         val endDate = startDate.plus(1, DateTimeUnit.MONTH)
@@ -178,6 +185,7 @@ class ReportsPresenter(
             categoryBreakdown = categoryBreakdown,
             incomeCategoryBreakdown = incomeCategoryBreakdown,
             financialSummary = financialSummary,
+            currencyCode = settings.currencyCode,
         ) { event ->
             when (event) {
                 ReportsScreen.Event.OnPreviousMonth -> {
@@ -234,13 +242,16 @@ fun ReportsUi(state: ReportsScreen.State, modifier: Modifier = Modifier) {
                 ReportViewType.SPENDING -> SpendingView(
                     totalSpending = state.totalSpending,
                     categoryBreakdown = state.categoryBreakdown,
+                    currencyCode = state.currencyCode,
                 )
                 ReportViewType.EARNINGS -> EarningsView(
                     totalIncome = state.totalIncome,
                     incomeCategoryBreakdown = state.incomeCategoryBreakdown,
+                    currencyCode = state.currencyCode,
                 )
                 ReportViewType.BALANCE -> BalanceView(
                     financialSummary = state.financialSummary,
+                    currencyCode = state.currencyCode,
                 )
             }
         }
@@ -289,6 +300,7 @@ private fun getViewTypeIcon(viewType: ReportViewType): ImageVector {
 private fun SpendingView(
     totalSpending: Double,
     categoryBreakdown: List<CategorySpending>,
+    currencyCode: String,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -297,6 +309,7 @@ private fun SpendingView(
             amount = totalSpending,
             containerColor = MaterialTheme.colorScheme.errorContainer,
             contentColor = MaterialTheme.colorScheme.onErrorContainer,
+            currencyCode = currencyCode,
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -339,7 +352,10 @@ private fun SpendingView(
                         ) + expandVertically(),
                         label = "category_item_$index"
                     ) {
-                        CategoryBreakdownItem(spending = spending)
+                        CategoryBreakdownItem(
+                            spending = spending,
+                            currencyCode = currencyCode,
+                        )
                     }
                 }
             }
@@ -351,6 +367,7 @@ private fun SpendingView(
 private fun EarningsView(
     totalIncome: Double,
     incomeCategoryBreakdown: List<IncomeCategorySpending>,
+    currencyCode: String,
     modifier: Modifier = Modifier,
 ) {
     Column(modifier = modifier) {
@@ -359,6 +376,7 @@ private fun EarningsView(
             amount = totalIncome,
             containerColor = MaterialTheme.colorScheme.tertiaryContainer,
             contentColor = MaterialTheme.colorScheme.onTertiaryContainer,
+            currencyCode = currencyCode,
         )
 
         Spacer(modifier = Modifier.height(24.dp))
@@ -401,7 +419,10 @@ private fun EarningsView(
                         ) + expandVertically(),
                         label = "income_category_item_$index"
                     ) {
-                        IncomeCategoryBreakdownItem(spending = spending)
+                        IncomeCategoryBreakdownItem(
+                            spending = spending,
+                            currencyCode = currencyCode,
+                        )
                     }
                 }
             }
@@ -412,6 +433,7 @@ private fun EarningsView(
 @Composable
 private fun BalanceView(
     financialSummary: FinancialSummary,
+    currencyCode: String,
     modifier: Modifier = Modifier,
 ) {
     val isSaving = financialSummary.isSaving
@@ -450,7 +472,7 @@ private fun BalanceView(
                 )
                 Spacer(modifier = Modifier.height(8.dp))
                 Text(
-                    text = formatCurrency(kotlin.math.abs(financialSummary.netBalance)),
+                    text = formatCurrency(kotlin.math.abs(financialSummary.netBalance), currencyCode),
                     style = MaterialTheme.typography.headlineLarge,
                     fontWeight = FontWeight.Bold,
                     color = balanceColor,
@@ -496,7 +518,7 @@ private fun BalanceView(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = formatCurrency(financialSummary.totalIncome),
+                        text = formatCurrency(financialSummary.totalIncome, currencyCode),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.tertiary,
@@ -523,7 +545,7 @@ private fun BalanceView(
                     )
                     Spacer(modifier = Modifier.height(4.dp))
                     Text(
-                        text = formatCurrency(financialSummary.totalExpenses),
+                        text = formatCurrency(financialSummary.totalExpenses, currencyCode),
                         style = MaterialTheme.typography.titleMedium,
                         fontWeight = FontWeight.Bold,
                         color = MaterialTheme.colorScheme.error,
@@ -567,6 +589,7 @@ private fun TotalCard(
     amount: Double,
     containerColor: androidx.compose.ui.graphics.Color,
     contentColor: androidx.compose.ui.graphics.Color,
+    currencyCode: String,
     modifier: Modifier = Modifier,
 ) {
     val animatedAmount by animateFloatAsState(
@@ -597,7 +620,7 @@ private fun TotalCard(
             )
             Spacer(modifier = Modifier.height(8.dp))
             Text(
-                text = formatCurrency(animatedAmount.toDouble()),
+                text = formatCurrency(animatedAmount.toDouble(), currencyCode),
                 style = MaterialTheme.typography.headlineLarge,
                 fontWeight = FontWeight.Bold,
                 color = contentColor,
@@ -609,6 +632,7 @@ private fun TotalCard(
 @Composable
 private fun CategoryBreakdownItem(
     spending: CategorySpending,
+    currencyCode: String,
     modifier: Modifier = Modifier,
 ) {
     val categoryColor = spending.category.color
@@ -657,7 +681,7 @@ private fun CategoryBreakdownItem(
                         fontWeight = FontWeight.Medium,
                     )
                     Text(
-                        text = formatCurrency(spending.amount),
+                        text = formatCurrency(spending.amount, currencyCode),
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Bold,
                     )
@@ -686,6 +710,7 @@ private fun CategoryBreakdownItem(
 @Composable
 private fun IncomeCategoryBreakdownItem(
     spending: IncomeCategorySpending,
+    currencyCode: String,
     modifier: Modifier = Modifier,
 ) {
     val categoryColor = spending.category.color
@@ -734,7 +759,7 @@ private fun IncomeCategoryBreakdownItem(
                         fontWeight = FontWeight.Medium,
                     )
                     Text(
-                        text = formatCurrency(spending.amount),
+                        text = formatCurrency(spending.amount, currencyCode),
                         style = MaterialTheme.typography.bodyLarge,
                         fontWeight = FontWeight.Bold,
                     )

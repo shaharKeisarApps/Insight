@@ -3,6 +3,7 @@ package com.keisardev.insight.di
 import android.app.Activity
 import android.app.Application
 import com.keisardev.insight.InsightApp
+import com.keisardev.insight.core.ai.model.ModelRepository
 import com.keisardev.insight.core.common.di.AppScope
 import com.keisardev.insight.core.data.repository.CategoryRepository
 import com.keisardev.insight.core.data.repository.IncomeCategoryRepository
@@ -18,6 +19,7 @@ interface AppGraph {
     val activityProviders: Map<KClass<out Activity>, Provider<Activity>>
     val categoryRepository: CategoryRepository
     val incomeCategoryRepository: IncomeCategoryRepository
+    val modelRepository: ModelRepository
 
     fun inject(application: InsightApp)
 

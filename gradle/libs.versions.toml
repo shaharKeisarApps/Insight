@@ -9,6 +9,8 @@ activityCompose = "1.12.2"
 kotlin = "2.3.0"
 ksp = "2.3.4"
 composeBom = "2025.12.01"
+composeBomAlpha = "2026.02.00"
+composeMaterial3Alpha = "1.5.0-alpha14"
 metro = "0.9.2"
 circuit = "0.31.0"
 coroutines = "1.10.2"
@@ -20,6 +22,8 @@ robolectric = "4.16"
 koog = "0.6.0"
 llamatik = "0.16.0"
 ktor = "3.1.3"
+datastore = "1.2.0"
+kotlinxSerialization = "1.8.1"
 screenshot = "0.0.1-alpha12"
 
 [libraries]
@@ -39,6 +43,7 @@ androidx-compose-ui-test-manifest = { group = "androidx.compose.ui", name = "ui-
 androidx-compose-ui-test-junit4 = { group = "androidx.compose.ui", name = "ui-test-junit4" }
 androidx-compose-material-icons-extended = { group = "androidx.compose.material", name = "material-icons-extended" }
 androidx-compose-material3 = { group = "androidx.compose.material3", name = "material3" }
+androidx-compose-material3-expressive = { group = "androidx.compose.material3", name = "material3", version.ref = "composeMaterial3Alpha" }
 androidx-compose-material3-adaptive-navigation-suite = { group = "androidx.compose.material3", name = "material3-adaptive-navigation-suite" }
 circuit-foundation = { module = "com.slack.circuit:circuit-foundation", version.ref = "circuit" }
 circuit-retained = { module = "com.slack.circuit:circuit-retained", version.ref = "circuit" }
@@ -71,6 +76,12 @@ llamatik = { module = "com.llamatik:library", version.ref = "llamatik" }
 # Ktor (required by Koog)
 ktor-client-okhttp = { module = "io.ktor:ktor-client-okhttp", version.ref = "ktor" }
 
+# DataStore (Proto)
+androidx-datastore = { module = "androidx.datastore:datastore-core-okio", version.ref = "datastore" }
+
+# Kotlin Serialization (for Proto DataStore)
+kotlinx-serialization-json = { module = "org.jetbrains.kotlinx:kotlinx-serialization-json", version.ref = "kotlinxSerialization" }
+
 # Screenshot testing
 screenshot-validation-api = { group = "com.android.tools.screenshot", name = "screenshot-validation-api", version.ref = "screenshot" }
 
@@ -81,6 +92,7 @@ android-library = { id = "com.android.library", version.ref = "agp" }
 kotlin-android = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 kotlin-compose = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 kotlin-parcelize = { id = "org.jetbrains.kotlin.plugin.parcelize", version.ref = "kotlin" }
+kotlin-serialization = { id = "org.jetbrains.kotlin.plugin.serialization", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 metro = { id = "dev.zacsweers.metro", version.ref = "metro" }
 sqldelight = { id = "app.cash.sqldelight", version.ref = "sqldelight" }

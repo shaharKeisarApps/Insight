@@ -46,6 +46,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import com.keisardev.insight.core.common.di.AppScope
+import com.keisardev.insight.core.data.datastore.UserSettings
+import com.keisardev.insight.core.data.datastore.UserSettingsRepository
 import com.keisardev.insight.core.data.repository.IncomeRepository
 import com.keisardev.insight.core.model.Income
 import com.keisardev.insight.core.model.IncomeCategory
@@ -71,6 +73,7 @@ data object IncomeScreen : Screen {
     data class State(
         val isLoading: Boolean,
         val incomes: List<Income>,
+        val currencyCode: String,
         val eventSink: (Event) -> Unit,
     ) : CircuitUiState
 
@@ -84,15 +87,19 @@ data object IncomeScreen : Screen {
 class IncomePresenter(
     @Assisted private val navigator: Navigator,
     private val incomeRepository: IncomeRepository,
+    private val userSettingsRepository: UserSettingsRepository,
 ) : Presenter<IncomeScreen.State> {
 
     @Composable
     override fun present(): IncomeScreen.State {
         val incomes by incomeRepository.observeAllIncome().collectAsRetainedState(initial = emptyList())
+        val settings by userSettingsRepository.observeSettings()
+            .collectAsRetainedState(initial = UserSettings())
 
         return IncomeScreen.State(
             isLoading = false,
             incomes = incomes,
+            currencyCode = settings.currencyCode,
         ) { event ->
             when (event) {
                 IncomeScreen.Event.OnAddClick -> {
@@ -178,6 +185,7 @@ fun IncomeUi(state: IncomeScreen.State, modifier: Modifier = Modifier) {
             else -> {
                 IncomeList(
                     incomes = state.incomes,
+                    currencyCode = state.currencyCode,
                     onIncomeClick = { state.eventSink(IncomeScreen.Event.OnIncomeClick(it)) },
                     listState = listState,
                     modifier = Modifier.padding(paddingValues),
@@ -190,6 +198,7 @@ fun IncomeUi(state: IncomeScreen.State, modifier: Modifier = Modifier) {
 @Composable
 private fun IncomeList(
     incomes: List<Income>,
+    currencyCode: String,
     onIncomeClick: (Long) -> Unit,
     listState: androidx.compose.foundation.lazy.LazyListState,
     modifier: Modifier = Modifier,
@@ -210,6 +219,7 @@ private fun IncomeList(
             ) {
                 IncomeItem(
                     income = income,
+                    currencyCode = currencyCode,
                     onClick = { onIncomeClick(income.id) },
                 )
             }
@@ -220,6 +230,7 @@ private fun IncomeList(
 @Composable
 private fun IncomeItem(
     income: Income,
+    currencyCode: String,
     onClick: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
@@ -265,7 +276,7 @@ private fun IncomeItem(
                 horizontalAlignment = Alignment.End,
             ) {
                 Text(
-                    text = formatCurrency(income.amount),
+                    text = formatCurrency(income.amount, currencyCode),
                     style = MaterialTheme.typography.titleMedium,
                     fontWeight = FontWeight.Bold,
                     color = MaterialTheme.colorScheme.tertiary,

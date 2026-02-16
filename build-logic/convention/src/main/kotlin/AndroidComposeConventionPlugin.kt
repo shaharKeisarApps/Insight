@@ -19,6 +19,9 @@ class AndroidComposeConventionPlugin : Plugin<Project> {
                 val bom = versionCatalog.findLibrary("androidx-compose-bom").get()
                 add("implementation", platform(bom))
                 add("androidTestImplementation", platform(bom))
+
+                // Material3 Expressive alpha — overrides BOM version for LoadingIndicator etc.
+                add("implementation", versionCatalog.findLibrary("androidx-compose-material3-expressive").get())
             }
         }
     }
