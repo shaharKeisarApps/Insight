@@ -72,6 +72,7 @@ sqldelight-gradlePlugin = { module = "app.cash.sqldelight:gradle-plugin", versio
 # Koog AI Agent Framework
 koog-agents = { module = "ai.koog:koog-agents-jvm", version.ref = "koog" }
 koog-openai = { module = "ai.koog:prompt-executor-openai-client-jvm", version.ref = "koog" }
+koog-google = { module = "ai.koog:prompt-executor-google-client-jvm", version.ref = "koog" }
 
 # Llamatik (on-device LLM inference)
 llamatik = { module = "com.llamatik:library", version.ref = "llamatik" }

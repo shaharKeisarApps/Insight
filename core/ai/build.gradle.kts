@@ -15,6 +15,7 @@ dependencies {
     // Koog AI Agent Framework (cloud)
     implementation(libs.koog.agents)
     implementation(libs.koog.openai)
+    implementation(libs.koog.google)
 
     // Llamatik (on-device LLM inference)
     implementation(libs.llamatik)

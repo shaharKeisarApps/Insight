@@ -14,9 +14,9 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Download
+import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material.icons.filled.SmartToy
-import androidx.compose.material.icons.filled.SwapHoriz
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
 import androidx.compose.material3.CardDefaults
@@ -24,18 +24,28 @@ import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.ModalBottomSheet
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
 import androidx.compose.material3.rememberModalBottomSheetState
+import android.Manifest
+import android.content.pm.PackageManager
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.core.content.ContextCompat
+import com.keisardev.insight.core.model.InstalledModel
 import com.keisardev.insight.core.model.ModelInfo
 import com.keisardev.insight.core.model.ModelState
 import com.keisardev.insight.core.ui.util.formatBytes
@@ -54,10 +64,24 @@ fun ModelSetupBottomSheet(
     onCancel: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
-    onDeleteModel: () -> Unit,
+    onDeleteModel: (String) -> Unit,
     onChangeModel: () -> Unit,
+    onSelectActiveModel: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    // Request notification permission when sheet opens (Android 13+)
+    val context = LocalContext.current
+    val permissionLauncher = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.RequestPermission(),
+    ) { /* Download works regardless — permission is for notification visibility */ }
+    LaunchedEffect(Unit) {
+        if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
+            != PackageManager.PERMISSION_GRANTED
+        ) {
+            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+        }
+    }
+
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,
@@ -78,6 +102,7 @@ fun ModelSetupBottomSheet(
             onSearch = onSearch,
             onDeleteModel = onDeleteModel,
             onChangeModel = onChangeModel,
+            onSelectActiveModel = onSelectActiveModel,
         )
     }
 }
@@ -95,8 +120,9 @@ fun ModelSetupContent(
     onDismiss: () -> Unit,
     onSearchQueryChange: (String) -> Unit,
     onSearch: () -> Unit,
-    onDeleteModel: () -> Unit,
+    onDeleteModel: (String) -> Unit,
     onChangeModel: () -> Unit,
+    onSelectActiveModel: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Column(
@@ -137,45 +163,38 @@ fun ModelSetupContent(
             }
 
             modelState is ModelState.Ready && !showModelSelection -> {
-                Icon(
-                    imageVector = Icons.Default.CheckCircle,
-                    contentDescription = null,
-                    modifier = Modifier.size(48.dp),
-                    tint = MaterialTheme.colorScheme.primary,
-                )
+                // Header
                 Text(
-                    text = modelState.modelName,
+                    text = "Installed Models (${modelState.installedModels.size})",
                     style = MaterialTheme.typography.titleMedium,
-                    color = MaterialTheme.colorScheme.primary,
-                )
-                Text(
-                    text = formatBytes(modelState.sizeBytes),
-                    style = MaterialTheme.typography.bodySmall,
-                    color = MaterialTheme.colorScheme.onSurfaceVariant,
                 )
 
-                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                    OutlinedButton(onClick = onChangeModel) {
-                        Icon(
-                            imageVector = Icons.Default.SwapHoriz,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
+                // Installed models list
+                LazyColumn(
+                    verticalArrangement = Arrangement.spacedBy(8.dp),
+                    modifier = Modifier.weight(1f, fill = false),
+                ) {
+                    items(modelState.installedModels, key = { it.fileName }) { model ->
+                        InstalledModelCard(
+                            model = model,
+                            onSelect = { onSelectActiveModel(model.fileName) },
+                            onDelete = if (!model.isActive) {{ onDeleteModel(model.fileName) }} else null,
                         )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Change Model")
-                    }
-                    TextButton(onClick = onDeleteModel) {
-                        Icon(
-                            imageVector = Icons.Default.Delete,
-                            contentDescription = null,
-                            modifier = Modifier.size(18.dp),
-                            tint = MaterialTheme.colorScheme.error,
-                        )
-                        Spacer(modifier = Modifier.width(4.dp))
-                        Text("Delete", color = MaterialTheme.colorScheme.error)
                     }
                 }
 
+                // Download another model button
+                OutlinedButton(onClick = onChangeModel) {
+                    Icon(
+                        imageVector = Icons.Default.Download,
+                        contentDescription = null,
+                        modifier = Modifier.size(18.dp),
+                    )
+                    Spacer(modifier = Modifier.width(4.dp))
+                    Text("Download Another Model")
+                }
+
+                // Done button
                 Button(onClick = onDismiss) {
                     Text("Done")
                 }
@@ -207,6 +226,19 @@ fun ModelSetupContent(
                     isSearching = isSearching,
                 )
 
+                ModelRecommendationNote()
+
+                val installedFileNames = remember(modelState) {
+                    if (modelState is ModelState.Ready) {
+                        modelState.installedModels.map { it.fileName }.toSet()
+                    } else {
+                        emptySet()
+                    }
+                }
+                val activeFileName = remember(modelState) {
+                    if (modelState is ModelState.Ready) modelState.activeModelFileName else ""
+                }
+
                 LazyColumn(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     modifier = Modifier.weight(1f, fill = false),
@@ -222,7 +254,12 @@ fun ModelSetupContent(
                             )
                         }
                         items(searchResults, key = { it.id }) { model ->
-                            ModelCard(model = model, onDownload = { onDownload(model) })
+                            ModelCard(
+                                model = model,
+                                onDownload = { onDownload(model) },
+                                isInstalled = model.fileName in installedFileNames,
+                                isActive = model.fileName == activeFileName,
+                            )
                         }
                         item {
                             Text(
@@ -236,7 +273,12 @@ fun ModelSetupContent(
 
                     // Curated models
                     items(availableModels, key = { it.id }) { model ->
-                        ModelCard(model = model, onDownload = { onDownload(model) })
+                        ModelCard(
+                            model = model,
+                            onDownload = { onDownload(model) },
+                            isInstalled = model.fileName in installedFileNames,
+                            isActive = model.fileName == activeFileName,
+                        )
                     }
                 }
             }
@@ -262,7 +304,7 @@ fun ModelSearchBar(
             if (isSearching) {
                 CircularProgressIndicator(modifier = Modifier.size(20.dp), strokeWidth = 2.dp)
             } else {
-                androidx.compose.material3.IconButton(onClick = onSearch) {
+                IconButton(onClick = onSearch) {
                     Icon(
                         imageVector = Icons.Default.Search,
                         contentDescription = "Search",
@@ -278,6 +320,8 @@ fun ModelCard(
     model: ModelInfo,
     onDownload: () -> Unit,
     modifier: Modifier = Modifier,
+    isInstalled: Boolean = false,
+    isActive: Boolean = false,
 ) {
     Card(
         modifier = modifier.fillMaxWidth(),
@@ -311,14 +355,54 @@ fun ModelCard(
                 }
             }
             Spacer(modifier = Modifier.width(12.dp))
-            FilledTonalButton(onClick = onDownload) {
-                Icon(
-                    imageVector = Icons.Default.Download,
-                    contentDescription = null,
-                    modifier = Modifier.size(18.dp),
-                )
-                Spacer(modifier = Modifier.width(4.dp))
-                Text("Download")
+            when {
+                isActive -> {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = "Active model",
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.tertiary,
+                        )
+                        Text(
+                            text = "In Use",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.tertiary,
+                        )
+                    }
+                }
+                isInstalled -> {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(4.dp),
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.CheckCircle,
+                            contentDescription = "Installed",
+                            modifier = Modifier.size(18.dp),
+                            tint = MaterialTheme.colorScheme.primary,
+                        )
+                        Text(
+                            text = "Installed",
+                            style = MaterialTheme.typography.labelMedium,
+                            color = MaterialTheme.colorScheme.primary,
+                        )
+                    }
+                }
+                else -> {
+                    FilledTonalButton(onClick = onDownload) {
+                        Icon(
+                            imageVector = Icons.Default.Download,
+                            contentDescription = null,
+                            modifier = Modifier.size(18.dp),
+                        )
+                        Spacer(modifier = Modifier.width(4.dp))
+                        Text("Download")
+                    }
+                }
             }
         }
     }
@@ -359,6 +443,105 @@ fun ModelSetupBanner(
                     text = "Tap to set up on-device AI",
                     style = MaterialTheme.typography.bodySmall,
                     color = MaterialTheme.colorScheme.onSecondaryContainer.copy(alpha = 0.7f),
+                )
+            }
+        }
+    }
+}
+
+@Composable
+fun InstalledModelCard(
+    model: InstalledModel,
+    onSelect: () -> Unit,
+    onDelete: (() -> Unit)?,
+    modifier: Modifier = Modifier,
+) {
+    Card(
+        onClick = onSelect,
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = if (model.isActive) {
+                MaterialTheme.colorScheme.primaryContainer
+            } else {
+                MaterialTheme.colorScheme.surfaceContainerHigh
+            },
+        ),
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(16.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(12.dp),
+        ) {
+            RadioButton(
+                selected = model.isActive,
+                onClick = onSelect,
+            )
+            Column(modifier = Modifier.weight(1f)) {
+                Text(
+                    text = model.displayName,
+                    style = MaterialTheme.typography.titleSmall,
+                    color = if (model.isActive) {
+                        MaterialTheme.colorScheme.onPrimaryContainer
+                    } else {
+                        MaterialTheme.colorScheme.onSurface
+                    },
+                )
+                Text(
+                    text = formatBytes(model.sizeBytes),
+                    style = MaterialTheme.typography.bodySmall,
+                    color = if (model.isActive) {
+                        MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.7f)
+                    } else {
+                        MaterialTheme.colorScheme.onSurfaceVariant
+                    },
+                )
+            }
+            if (onDelete != null) {
+                IconButton(onClick = onDelete) {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = "Delete model",
+                        tint = MaterialTheme.colorScheme.error,
+                        modifier = Modifier.size(20.dp),
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun ModelRecommendationNote(modifier: Modifier = Modifier) {
+    Card(
+        modifier = modifier.fillMaxWidth(),
+        colors = CardDefaults.cardColors(
+            containerColor = MaterialTheme.colorScheme.tertiaryContainer,
+        ),
+    ) {
+        Row(
+            modifier = Modifier.padding(12.dp),
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+        ) {
+            Icon(
+                imageVector = Icons.Default.Info,
+                contentDescription = null,
+                modifier = Modifier.size(18.dp),
+                tint = MaterialTheme.colorScheme.onTertiaryContainer,
+            )
+            Column {
+                Text(
+                    text = "Choosing a model",
+                    style = MaterialTheme.typography.labelMedium,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer,
+                )
+                Text(
+                    text = "For on-device finance tracking, small instruct/chat models work best " +
+                        "(0.5B\u20133B parameters). Look for Q4_K_M or Q8_0 quantizations and " +
+                        "\u201Cinstruct\u201D or \u201Cchat\u201D variants.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = MaterialTheme.colorScheme.onTertiaryContainer.copy(alpha = 0.8f),
                 )
             }
         }

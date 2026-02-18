@@ -5,8 +5,12 @@ import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
 import com.keisardev.insight.core.data.repository.CategoryRepository
 import com.keisardev.insight.core.data.repository.ExpenseRepository
+import com.keisardev.insight.core.model.Expense
 import kotlinx.coroutines.flow.first
+import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 /**
  * Koog tools for querying expense data.
@@ -16,6 +20,7 @@ import kotlinx.datetime.LocalDate
 class ExpenseTools(
     private val expenseRepository: ExpenseRepository,
     private val categoryRepository: CategoryRepository,
+    private val currencySymbol: String = "$",
 ) : ToolSet {
 
     @Tool
@@ -28,9 +33,11 @@ class ExpenseTools(
             val start = LocalDate.parse(startDate)
             val end = LocalDate.parse(endDate)
             val total = expenseRepository.observeMonthlyTotal(start, end).first()
-            "Total expenses from $startDate to $endDate: $${String.format("%.2f", total)}"
+            "Total expenses from $startDate to $endDate: ${currencySymbol}${String.format("%.2f", total)}"
+        } catch (e: IllegalArgumentException) {
+            "ERROR: Invalid date format. Use YYYY-MM-DD. You provided: startDate='$startDate', endDate='$endDate'"
         } catch (e: Exception) {
-            "Error getting total expenses: ${e.message}"
+            "ERROR: Failed to get total expenses: ${e.message}"
         }
     }
 
@@ -53,12 +60,14 @@ class ExpenseTools(
                     .sortedByDescending { it.value }
                     .map { (category, amount) ->
                         val percentage = (amount / total * 100)
-                        "${category.name}: $${String.format("%.2f", amount)} (${String.format("%.1f", percentage)}%)"
+                        "${category.name}: ${currencySymbol}${String.format("%.2f", amount)} (${String.format("%.1f", percentage)}%)"
                     }
-                "Expenses by category from $startDate to $endDate:\n${lines.joinToString("\n")}\n\nTotal: $${String.format("%.2f", total)}"
+                "Expenses by category from $startDate to $endDate:\n${lines.joinToString("\n")}\n\nTotal: ${currencySymbol}${String.format("%.2f", total)}"
             }
+        } catch (e: IllegalArgumentException) {
+            "ERROR: Invalid date format. Use YYYY-MM-DD. You provided: startDate='$startDate', endDate='$endDate'"
         } catch (e: Exception) {
-            "Error getting expenses by category: ${e.message}"
+            "ERROR: Failed to get expenses by category: ${e.message}"
         }
     }
 
@@ -69,7 +78,7 @@ class ExpenseTools(
             val categories = categoryRepository.observeAllCategories().first()
             "Available categories: ${categories.joinToString(", ") { it.name }}"
         } catch (e: Exception) {
-            "Error getting categories: ${e.message}"
+            "ERROR: Failed to get categories: ${e.message}"
         }
     }
 
@@ -86,12 +95,12 @@ class ExpenseTools(
                 "No expenses recorded yet."
             } else {
                 val lines = expenses.map { expense ->
-                    "- ${expense.date}: ${expense.category.name} - $${String.format("%.2f", expense.amount)} ${if (expense.description.isNotBlank()) "(${expense.description})" else ""}"
+                    "- ${expense.date}: ${expense.category.name} - ${currencySymbol}${String.format("%.2f", expense.amount)} ${if (expense.description.isNotBlank()) "(${expense.description})" else ""}"
                 }
                 "Recent expenses:\n${lines.joinToString("\n")}"
             }
         } catch (e: Exception) {
-            "Error getting recent expenses: ${e.message}"
+            "ERROR: Failed to get recent expenses: ${e.message}"
         }
     }
 
@@ -110,12 +119,14 @@ class ExpenseTools(
                 "No expenses found from $startDate to $endDate."
             } else {
                 val lines = expenses.map { expense ->
-                    "- ${expense.date}: ${expense.category.name} - $${String.format("%.2f", expense.amount)} ${if (expense.description.isNotBlank()) "(${expense.description})" else ""}"
+                    "- ${expense.date}: ${expense.category.name} - ${currencySymbol}${String.format("%.2f", expense.amount)} ${if (expense.description.isNotBlank()) "(${expense.description})" else ""}"
                 }
                 "Expenses from $startDate to $endDate:\n${lines.joinToString("\n")}"
             }
+        } catch (e: IllegalArgumentException) {
+            "ERROR: Invalid date format. Use YYYY-MM-DD. You provided: startDate='$startDate', endDate='$endDate'"
         } catch (e: Exception) {
-            "Error getting expenses: ${e.message}"
+            "ERROR: Failed to get expenses: ${e.message}"
         }
     }
 
@@ -141,12 +152,53 @@ class ExpenseTools(
             } else {
                 val total = matchingExpenses.sumOf { it.amount }
                 val lines = matchingExpenses.map { expense ->
-                    "- ${expense.date}: ${expense.category.name} - $${String.format("%.2f", expense.amount)} ${if (expense.description.isNotBlank()) "(${expense.description})" else ""}"
+                    "- ${expense.date}: ${expense.category.name} - ${currencySymbol}${String.format("%.2f", expense.amount)} ${if (expense.description.isNotBlank()) "(${expense.description})" else ""}"
                 }
-                "Found ${matchingExpenses.size} expense(s) matching '$keyword':\n${lines.joinToString("\n")}\n\nTotal spent on '$keyword': $${String.format("%.2f", total)}"
+                "Found ${matchingExpenses.size} expense(s) matching '$keyword':\n${lines.joinToString("\n")}\n\nTotal spent on '$keyword': ${currencySymbol}${String.format("%.2f", total)}"
             }
         } catch (e: Exception) {
-            "Error searching expenses: ${e.message}"
+            "ERROR: Failed to search expenses: ${e.message}"
+        }
+    }
+
+    @Tool
+    @LLMDescription(
+        "Add a new expense entry to the user's tracker. Use this when the user asks to add, create, or record an expense. " +
+            "Requires amount, category name, and optionally a description and date. " +
+            "The category must match one of the available expense categories (case-insensitive). " +
+            "If no date is provided, today's date is used.",
+    )
+    suspend fun addExpense(
+        @LLMDescription("The expense amount as a number (e.g. 42.50)") amount: Double,
+        @LLMDescription("The expense category name (must match an existing category, case-insensitive). Examples: 'Food', 'Transport', 'Entertainment'")
+        categoryName: String,
+        @LLMDescription("Optional description for the expense entry") description: String = "",
+        @LLMDescription("Optional date in YYYY-MM-DD format. Defaults to today if not provided.") date: String = "",
+    ): String {
+        return try {
+            val categories = categoryRepository.observeAllCategories().first()
+            val category = categories.find { it.name.equals(categoryName, ignoreCase = true) }
+                ?: return "ERROR: Category '$categoryName' not found. Available categories: ${categories.joinToString(", ") { it.name }}"
+
+            val expenseDate = if (date.isNotBlank()) {
+                LocalDate.parse(date)
+            } else {
+                Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+            }
+
+            val expense = Expense(
+                amount = amount,
+                category = category,
+                description = description,
+                date = expenseDate,
+                createdAt = Clock.System.now(),
+            )
+            expenseRepository.insertExpense(expense)
+            "Successfully added expense: ${currencySymbol}${String.format("%.2f", amount)} in ${category.name} on $expenseDate${if (description.isNotBlank()) " ($description)" else ""}"
+        } catch (e: IllegalArgumentException) {
+            "ERROR: Invalid date format. Use YYYY-MM-DD. You provided: '$date'"
+        } catch (e: Exception) {
+            "ERROR: Failed to add expense: ${e.message}"
         }
     }
 }

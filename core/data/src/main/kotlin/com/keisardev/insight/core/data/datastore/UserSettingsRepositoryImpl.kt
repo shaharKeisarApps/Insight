@@ -27,4 +27,24 @@ class UserSettingsRepositoryImpl(
             current.copy(currencyCode = currencyCode)
         }
     }
+
+    override suspend fun updateActiveModel(fileName: String) {
+        dataStore.updateData { current ->
+            current.copy(activeModelFileName = fileName)
+        }
+    }
+
+    override suspend fun updateCloudSettings(cloudSettings: UserSettings.CloudSettings) {
+        dataStore.updateData { current ->
+            current.copy(cloudSettings = cloudSettings)
+        }
+    }
+
+    override suspend fun updateUseDevKey(useDevKey: Boolean) {
+        dataStore.updateData { current ->
+            current.copy(
+                cloudSettings = current.cloudSettings.copy(useDevKey = useDevKey),
+            )
+        }
+    }
 }

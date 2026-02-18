@@ -5,6 +5,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import com.android.tools.screenshot.PreviewTest
 import com.keisardev.insight.core.ai.service.AiMode
 import com.keisardev.insight.core.designsystem.theme.InsightTheme
+import com.keisardev.insight.core.model.CloudModelOption
 import com.keisardev.insight.core.model.ModelState
 
 // ==================== DEFAULT STATE ====================
@@ -33,6 +34,17 @@ fun SettingsDefaultLightPreview() {
                 showModelSelection = false,
                 currencyCode = "USD",
                 showCurrencyPicker = false,
+                categoryCount = 14,
+                showCloudSetup = false,
+                cloudProvider = "OPENAI",
+                cloudApiKey = "",
+                cloudModelId = "gpt-4o-mini",
+                cloudModels = listOf(
+                    CloudModelOption("gpt-4o-mini", "GPT-4o Mini", "Fast and affordable"),
+                ),
+                isDevKeyAvailable = false,
+                useDevKey = false,
+                getModelsForProvider = { emptyList() },
                 eventSink = {},
             ),
         )
@@ -67,6 +79,17 @@ fun SettingsDefaultDarkPreview() {
                 showModelSelection = false,
                 currencyCode = "USD",
                 showCurrencyPicker = false,
+                categoryCount = 14,
+                showCloudSetup = false,
+                cloudProvider = "OPENAI",
+                cloudApiKey = "",
+                cloudModelId = "gpt-4o-mini",
+                cloudModels = listOf(
+                    CloudModelOption("gpt-4o-mini", "GPT-4o Mini", "Fast and affordable"),
+                ),
+                isDevKeyAvailable = false,
+                useDevKey = false,
+                getModelsForProvider = { emptyList() },
                 eventSink = {},
             ),
         )
@@ -95,6 +118,18 @@ fun SettingsCloudModePreview() {
                 showModelSelection = false,
                 currencyCode = "EUR",
                 showCurrencyPicker = false,
+                categoryCount = 14,
+                showCloudSetup = false,
+                cloudProvider = "OPENAI",
+                cloudApiKey = "sk-test123",
+                cloudModelId = "gpt-4o-mini",
+                cloudModels = listOf(
+                    CloudModelOption("gpt-4o-mini", "GPT-4o Mini", "Fast and affordable"),
+                    CloudModelOption("gpt-4o", "GPT-4o", "High intelligence"),
+                ),
+                isDevKeyAvailable = false,
+                useDevKey = false,
+                getModelsForProvider = { emptyList() },
                 eventSink = {},
             ),
         )
@@ -123,6 +158,15 @@ fun SettingsLocalNoModelPreview() {
                 showModelSelection = false,
                 currencyCode = "USD",
                 showCurrencyPicker = false,
+                categoryCount = 14,
+                showCloudSetup = false,
+                cloudProvider = "OPENAI",
+                cloudApiKey = "",
+                cloudModelId = "",
+                cloudModels = emptyList(),
+                isDevKeyAvailable = false,
+                useDevKey = false,
+                getModelsForProvider = { emptyList() },
                 eventSink = {},
             ),
         )
@@ -151,6 +195,15 @@ fun SettingsClearDataDialogPreview() {
                 showModelSelection = false,
                 currencyCode = "USD",
                 showCurrencyPicker = false,
+                categoryCount = 14,
+                showCloudSetup = false,
+                cloudProvider = "OPENAI",
+                cloudApiKey = "",
+                cloudModelId = "",
+                cloudModels = emptyList(),
+                isDevKeyAvailable = false,
+                useDevKey = false,
+                getModelsForProvider = { emptyList() },
                 eventSink = {},
             ),
         )

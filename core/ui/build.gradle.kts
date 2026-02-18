@@ -13,5 +13,6 @@ dependencies {
     api(project(":core:designsystem"))
 
     api(libs.androidx.compose.material.icons.extended)
+    implementation(libs.androidx.activity.compose)
     implementation(libs.kotlinx.datetime)
 }

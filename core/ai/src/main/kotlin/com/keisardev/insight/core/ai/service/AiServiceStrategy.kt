@@ -1,13 +1,17 @@
 package com.keisardev.insight.core.ai.service
 
+import com.keisardev.insight.core.ai.config.CloudModelRegistry
+import com.keisardev.insight.core.ai.config.CloudProvider
 import com.keisardev.insight.core.common.di.AppScope
 import com.keisardev.insight.core.data.datastore.UserSettings
 import com.keisardev.insight.core.data.datastore.UserSettingsRepository
 import com.keisardev.insight.core.model.Category
+import com.keisardev.insight.core.model.CloudModelOption
 import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 
 /**
@@ -37,7 +41,15 @@ class AiServiceStrategy(
     private val userSettingsRepository: UserSettingsRepository,
 ) : AiService {
 
-    var mode: AiMode = AiMode.AUTO
+    @Volatile var mode: AiMode = AiMode.AUTO
+    @Volatile private var modeSynced = false
+
+    private suspend fun syncModeIfNeeded() {
+        if (modeSynced) return
+        val settings = userSettingsRepository.observeSettings().first()
+        mode = settings.aiMode.toAiMode()
+        modeSynced = true
+    }
 
     val isLocalAvailable: Boolean
         get() = llamatikAiService.isEnabled
@@ -45,12 +57,28 @@ class AiServiceStrategy(
     val isCloudAvailable: Boolean
         get() = koogAiService.isEnabled
 
+    val hasDevKey: Boolean
+        get() = koogAiService.hasDevKey
+
     fun observeAiMode(): Flow<AiMode> =
         userSettingsRepository.observeSettings().map { it.aiMode.toAiMode() }
 
     suspend fun setMode(newMode: AiMode) {
         mode = newMode
         userSettingsRepository.updateAiMode(newMode.toProto())
+    }
+
+    fun getAvailableCloudModels(providerName: String): List<CloudModelOption> {
+        val provider = try {
+            CloudProvider.valueOf(providerName)
+        } catch (_: IllegalArgumentException) {
+            CloudProvider.OPENAI
+        }
+        return CloudModelRegistry.modelsForProvider(provider)
+    }
+
+    suspend fun refreshCloudConfig() {
+        modeSynced = false
     }
 
     private val activeService: AiService
@@ -66,12 +94,18 @@ class AiServiceStrategy(
     override suspend fun suggestCategory(
         description: String,
         availableCategories: List<Category>,
-    ): Category? = activeService.suggestCategory(description, availableCategories)
+    ): Category? {
+        syncModeIfNeeded()
+        return activeService.suggestCategory(description, availableCategories)
+    }
 
     override suspend fun chat(
         message: String,
         history: List<ChatMessage>,
-    ): String = activeService.chat(message, history)
+    ): String {
+        syncModeIfNeeded()
+        return activeService.chat(message, history)
+    }
 }
 
 private fun UserSettings.AiModeProto.toAiMode(): AiMode = when (this) {

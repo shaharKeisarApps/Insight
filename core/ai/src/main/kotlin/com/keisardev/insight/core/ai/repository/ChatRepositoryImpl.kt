@@ -14,9 +14,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeout
 import kotlinx.datetime.Clock
+import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Implementation of [ChatRepository] that manages in-memory chat state
@@ -38,6 +41,7 @@ class ChatRepositoryImpl(
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     private val _isLoading = MutableStateFlow(false)
     private val mutex = Mutex()
+    private val messageCounter = AtomicLong(0)
 
     override val isEnabled: Boolean
         get() = aiService.isEnabled
@@ -47,7 +51,14 @@ class ChatRepositoryImpl(
     override fun observeMessages(): Flow<List<ChatMessage>> = _messages.asStateFlow()
 
     override suspend fun sendMessage(content: String): ChatMessage {
-        check(isEnabled) { "AI features are not enabled" }
+        if (!isEnabled) {
+            return ChatMessage(
+                id = generateMessageId("assistant"),
+                content = "AI features are not currently available. Please check your settings.",
+                role = ChatRole.ASSISTANT,
+                timestamp = Clock.System.now(),
+            )
+        }
 
         val userMessage = ChatMessage(
             id = generateMessageId("user"),
@@ -71,10 +82,12 @@ class ChatRepositoryImpl(
                 .map { it.toServiceMessage() }
 
             // Get AI response with conversation history
-            val responseContent = aiService.chat(
-                message = content.trim(),
-                history = historyForService,
-            )
+            val responseContent = withTimeout(60_000L) {
+                aiService.chat(
+                    message = content.trim(),
+                    history = historyForService,
+                )
+            }
 
             val aiMessage = ChatMessage(
                 id = generateMessageId("assistant"),
@@ -89,6 +102,28 @@ class ChatRepositoryImpl(
             }
 
             aiMessage
+        } catch (e: TimeoutCancellationException) {
+            val timeoutMessage = ChatMessage(
+                id = generateMessageId("assistant"),
+                content = "The request timed out. Please try again with a simpler question.",
+                role = ChatRole.ASSISTANT,
+                timestamp = Clock.System.now(),
+            )
+            mutex.withLock {
+                _messages.update { it + timeoutMessage }
+            }
+            timeoutMessage
+        } catch (e: Exception) {
+            val errorMessage = ChatMessage(
+                id = generateMessageId("assistant"),
+                content = "Sorry, I encountered an error: ${e.message ?: "Unknown error"}. Please try again.",
+                role = ChatRole.ASSISTANT,
+                timestamp = Clock.System.now(),
+            )
+            mutex.withLock {
+                _messages.update { it + errorMessage }
+            }
+            errorMessage
         } finally {
             _isLoading.value = false
         }
@@ -120,7 +155,7 @@ class ChatRepositoryImpl(
     )
 
     private fun generateMessageId(prefix: String): String =
-        "${prefix}_${Clock.System.now().toEpochMilliseconds()}"
+        "${prefix}_${Clock.System.now().toEpochMilliseconds()}_${messageCounter.incrementAndGet()}"
 
     private fun ChatMessage.toServiceMessage(): ServiceChatMessage = ServiceChatMessage(
         role = when (role) {

@@ -25,6 +25,12 @@ class FakeModelRepository : ModelRepository {
         private set
     var deleteCallCount = 0
         private set
+    var lastDeletedFileName: String? = null
+        private set
+    var setActiveCallCount = 0
+        private set
+    var lastActiveFileName: String? = null
+        private set
     var searchCallCount = 0
         private set
 
@@ -46,7 +52,13 @@ class FakeModelRepository : ModelRepository {
         searchCallCount++
     }
 
-    override suspend fun deleteCurrentModel() {
+    override suspend fun deleteModel(fileName: String) {
         deleteCallCount++
+        lastDeletedFileName = fileName
+    }
+
+    override suspend fun setActiveModel(fileName: String) {
+        setActiveCallCount++
+        lastActiveFileName = fileName
     }
 }

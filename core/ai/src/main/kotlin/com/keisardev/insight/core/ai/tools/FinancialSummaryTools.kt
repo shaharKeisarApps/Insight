@@ -14,6 +14,7 @@ import kotlinx.datetime.LocalDate
 @LLMDescription("Tools for querying combined financial summaries including income, expenses, and net balance")
 class FinancialSummaryTools(
     private val financialSummaryRepository: FinancialSummaryRepository,
+    private val currencySymbol: String = "$",
 ) : ToolSet {
 
     @Tool
@@ -33,9 +34,9 @@ class FinancialSummaryTools(
 
             buildString {
                 appendLine("Financial Summary from $startDate to $endDate:")
-                appendLine("Total Income: $${String.format("%.2f", summary.totalIncome)}")
-                appendLine("Total Expenses: $${String.format("%.2f", summary.totalExpenses)}")
-                appendLine("Net Balance: $${String.format("%.2f", summary.netBalance)}")
+                appendLine("Total Income: ${currencySymbol}${String.format("%.2f", summary.totalIncome)}")
+                appendLine("Total Expenses: ${currencySymbol}${String.format("%.2f", summary.totalExpenses)}")
+                appendLine("Net Balance: ${currencySymbol}${String.format("%.2f", summary.netBalance)}")
                 if (summary.totalIncome > 0) {
                     appendLine("Savings Rate: ${String.format("%.1f", summary.savingsRate)}%")
                 }
@@ -47,7 +48,7 @@ class FinancialSummaryTools(
                     summary.expensesByCategory.entries
                         .sortedByDescending { it.value }
                         .forEach { (category, amount) ->
-                            appendLine("  - ${category.name}: $${String.format("%.2f", amount)}")
+                            appendLine("  - ${category.name}: ${currencySymbol}${String.format("%.2f", amount)}")
                         }
                 }
 
@@ -57,12 +58,14 @@ class FinancialSummaryTools(
                     summary.incomeByCategory.entries
                         .sortedByDescending { it.value }
                         .forEach { (category, amount) ->
-                            appendLine("  - ${category.name}: $${String.format("%.2f", amount)}")
+                            appendLine("  - ${category.name}: ${currencySymbol}${String.format("%.2f", amount)}")
                         }
                 }
             }.trim()
+        } catch (e: IllegalArgumentException) {
+            "ERROR: Invalid date format. Use YYYY-MM-DD. You provided: startDate='$startDate', endDate='$endDate'"
         } catch (e: Exception) {
-            "Error getting financial summary: ${e.message}"
+            "ERROR: Failed to get financial summary: ${e.message}"
         }
     }
 }

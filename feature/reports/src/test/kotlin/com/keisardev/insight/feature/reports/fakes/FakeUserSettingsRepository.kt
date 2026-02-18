@@ -17,4 +17,18 @@ class FakeUserSettingsRepository : UserSettingsRepository {
     override suspend fun updateCurrency(currencyCode: String) {
         settings.value = settings.value.copy(currencyCode = currencyCode)
     }
+
+    override suspend fun updateActiveModel(fileName: String) {
+        settings.value = settings.value.copy(activeModelFileName = fileName)
+    }
+
+    override suspend fun updateCloudSettings(cloudSettings: UserSettings.CloudSettings) {
+        settings.value = settings.value.copy(cloudSettings = cloudSettings)
+    }
+
+    override suspend fun updateUseDevKey(useDevKey: Boolean) {
+        settings.value = settings.value.copy(
+            cloudSettings = settings.value.cloudSettings.copy(useDevKey = useDevKey),
+        )
+    }
 }

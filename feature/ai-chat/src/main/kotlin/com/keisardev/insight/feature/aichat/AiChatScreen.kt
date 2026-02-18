@@ -120,8 +120,9 @@ data object AiChatScreen : Screen {
         data object OnDismissModelSetup : Event
         data class OnSearchQueryChange(val query: String) : Event
         data object OnSearch : Event
-        data object OnDeleteModel : Event
+        data class OnDeleteModel(val fileName: String) : Event
         data object OnChangeModel : Event
+        data class OnSelectActiveModel(val fileName: String) : Event
     }
 }
 
@@ -214,9 +215,14 @@ class AiChatPresenter(
                         modelRepository.searchModels(searchQuery)
                     }
                 }
-                AiChatScreen.Event.OnDeleteModel -> {
+                is AiChatScreen.Event.OnDeleteModel -> {
                     scope.launch {
-                        modelRepository.deleteCurrentModel()
+                        modelRepository.deleteModel(event.fileName)
+                    }
+                }
+                is AiChatScreen.Event.OnSelectActiveModel -> {
+                    scope.launch {
+                        modelRepository.setActiveModel(event.fileName)
                     }
                 }
                 AiChatScreen.Event.OnChangeModel -> {
@@ -294,8 +300,9 @@ fun AiChatUi(state: AiChatScreen.State, modifier: Modifier = Modifier) {
             onCancel = { state.eventSink(AiChatScreen.Event.OnCancelDownload) },
             onSearchQueryChange = { state.eventSink(AiChatScreen.Event.OnSearchQueryChange(it)) },
             onSearch = { state.eventSink(AiChatScreen.Event.OnSearch) },
-            onDeleteModel = { state.eventSink(AiChatScreen.Event.OnDeleteModel) },
+            onDeleteModel = { fileName -> state.eventSink(AiChatScreen.Event.OnDeleteModel(fileName)) },
             onChangeModel = { state.eventSink(AiChatScreen.Event.OnChangeModel) },
+            onSelectActiveModel = { fileName -> state.eventSink(AiChatScreen.Event.OnSelectActiveModel(fileName)) },
         )
     }
 }
@@ -329,7 +336,7 @@ private fun AiDisabledContent(modifier: Modifier = Modifier) {
                     color = MaterialTheme.colorScheme.onErrorContainer,
                 )
                 Text(
-                    text = "To enable AI features, add your OpenAI API key to local.properties:\n\nOPENAI_API_KEY=sk-your-key-here",
+                    text = "Set up a cloud provider in Settings or download an on-device model to enable AI features.",
                     style = MaterialTheme.typography.bodyMedium,
                     textAlign = TextAlign.Center,
                     color = MaterialTheme.colorScheme.onErrorContainer,

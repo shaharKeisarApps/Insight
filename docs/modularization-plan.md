@@ -26,7 +26,7 @@ app/
 Following NowInAndroid's modularization pattern with Circuit-specific adaptations:
 
 ```
-MetroDITest/
+Insight/
 ├── app/                          # Android application entry point
 ├── build-logic/                  # Convention plugins (already created)
 │   └── convention/
@@ -380,7 +380,7 @@ dependencies {
 
 **Remaining files:**
 - `MainActivity.kt`
-- `MetroDITestApp.kt`
+- `InsightApp.kt`
 - `di/AppGraph.kt` (aggregates all module contributions)
 - `navigation/MainContent.kt`
 - `navigation/AppDestinations.kt`
@@ -523,7 +523,7 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "MetroDITest"
+rootProject.name = "Insight"
 
 // Application
 include(":app")

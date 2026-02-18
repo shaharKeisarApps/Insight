@@ -4,14 +4,18 @@ import ai.koog.agents.core.agent.AIAgent
 import ai.koog.agents.core.tools.ToolRegistry
 import ai.koog.agents.core.tools.reflect.tools
 import ai.koog.agents.ext.agent.chatAgentStrategy
-import ai.koog.prompt.executor.clients.openai.OpenAIModels
 import ai.koog.prompt.executor.llms.SingleLLMPromptExecutor
+import ai.koog.prompt.executor.llms.all.simpleGoogleAIExecutor
 import ai.koog.prompt.executor.llms.all.simpleOpenAIExecutor
+import ai.koog.prompt.llm.LLModel
 import com.keisardev.insight.core.ai.config.AiConfig
+import com.keisardev.insight.core.ai.config.CloudModelRegistry
+import com.keisardev.insight.core.ai.config.CloudProvider
 import com.keisardev.insight.core.ai.tools.ExpenseTools
 import com.keisardev.insight.core.ai.tools.FinancialSummaryTools
 import com.keisardev.insight.core.ai.tools.IncomeTools
 import com.keisardev.insight.core.common.di.AppScope
+import com.keisardev.insight.core.data.datastore.UserSettingsRepository
 import com.keisardev.insight.core.data.repository.CategoryRepository
 import com.keisardev.insight.core.data.repository.ExpenseRepository
 import com.keisardev.insight.core.data.repository.FinancialSummaryRepository
@@ -21,18 +25,20 @@ import com.keisardev.insight.core.model.Category
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
+import kotlinx.coroutines.withTimeout
 import kotlinx.datetime.Clock
+import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
 /**
  * Implementation of [AiService] using JetBrains Koog framework.
  *
- * Performance optimizations:
- * - Prompt executor is lazily created once and reused (expensive to create)
- * - AIAgent instances are created per request (cheap to create, single-use design)
- * - Conversation history is passed to maintain context across messages
+ * Supports multiple cloud providers (OpenAI and Gemini) with dynamic executor switching.
+ * The executor is cached and reused until the provider/key combination changes.
  */
 @SingleIn(AppScope::class)
 @Inject
@@ -43,45 +49,83 @@ class KoogAiService(
     private val incomeRepository: IncomeRepository,
     private val incomeCategoryRepository: IncomeCategoryRepository,
     private val financialSummaryRepository: FinancialSummaryRepository,
+    private val userSettingsRepository: UserSettingsRepository,
 ) : AiService {
 
-    /**
-     * Lazily initialized prompt executor - reused across all agent instances.
-     * Creating executors is expensive (HTTP clients, connection pools).
-     */
-    private val promptExecutor: SingleLLMPromptExecutor? by lazy {
-        aiConfig.openAiApiKey?.let { simpleOpenAIExecutor(it) }
+    /** Key used to detect when the executor needs to be recreated. */
+    @Volatile
+    private var executorKey: String = ""
+
+    @Volatile
+    private var cachedExecutor: SingleLLMPromptExecutor? = null
+
+    private fun getExecutor(): SingleLLMPromptExecutor? {
+        val provider = aiConfig.cloudProvider
+        val apiKey = when (provider) {
+            CloudProvider.OPENAI -> aiConfig.openAiApiKey
+            CloudProvider.GEMINI -> aiConfig.geminiApiKey
+        } ?: return null
+
+        val newKey = "${provider.name}:$apiKey"
+        if (newKey == executorKey && cachedExecutor != null) {
+            return cachedExecutor
+        }
+
+        val executor = when (provider) {
+            CloudProvider.OPENAI -> simpleOpenAIExecutor(apiKey)
+            CloudProvider.GEMINI -> simpleGoogleAIExecutor(apiKey)
+        }
+        cachedExecutor = executor
+        executorKey = newKey
+        return executor
     }
 
-    /**
-     * Tool registry for chat agents - created once and reused.
-     */
-    private val chatToolRegistry: ToolRegistry by lazy {
-        ToolRegistry {
-            tools(ExpenseTools(expenseRepository, categoryRepository))
-            tools(IncomeTools(incomeRepository, incomeCategoryRepository))
-            tools(FinancialSummaryTools(financialSummaryRepository))
+    private fun getModel(): LLModel {
+        val modelId = aiConfig.selectedModelId
+        if (modelId != null) {
+            CloudModelRegistry.findLLModel(modelId)?.let { return it }
+        }
+        return CloudModelRegistry.findLLModel(
+            CloudModelRegistry.defaultModelId(aiConfig.cloudProvider),
+        )!!
+    }
+
+    private suspend fun getCurrencySymbol(): String {
+        return try {
+            val settings = userSettingsRepository.observeSettings().first()
+            val code = settings.currencyCode
+            if (code == "DEVICE") {
+                java.util.Currency.getInstance(java.util.Locale.getDefault()).symbol
+            } else {
+                java.util.Currency.getInstance(code).symbol
+            }
+        } catch (_: Exception) {
+            "$"
         }
     }
+
+    private fun createToolRegistry(currencySymbol: String): ToolRegistry {
+        return ToolRegistry {
+            tools(ExpenseTools(expenseRepository, categoryRepository, currencySymbol))
+            tools(IncomeTools(incomeRepository, incomeCategoryRepository, currencySymbol))
+            tools(FinancialSummaryTools(financialSummaryRepository, currencySymbol))
+        }
+    }
+
+    val hasDevKey: Boolean
+        get() = aiConfig.hasDevKey
 
     override val isEnabled: Boolean
         get() = aiConfig.isAiEnabled
 
-    /**
-     * Creates a chat agent with conversation history support.
-     * AIAgent instances are designed for single-run execution.
-     *
-     * @param history Previous conversation messages to include in context
-     */
-    private fun createChatAgent(history: List<ChatMessage>): AIAgent<String, String> {
-        val executor = promptExecutor
+    private fun createChatAgent(history: List<ChatMessage>, currencySymbol: String): AIAgent<String, String> {
+        val executor = getExecutor()
             ?: throw IllegalStateException("AI service not configured - missing API key")
 
         val today = Clock.System.now()
             .toLocalDateTime(TimeZone.currentSystemDefault())
             .date
 
-        // Build conversation history context
         val historyContext = if (history.isNotEmpty()) {
             val formattedHistory = history.joinToString("\n") { msg ->
                 val role = when (msg.role) {
@@ -97,13 +141,15 @@ class KoogAiService(
 
         return AIAgent(
             promptExecutor = executor,
-            llmModel = OpenAIModels.Chat.GPT4oMini,
+            llmModel = getModel(),
             strategy = chatAgentStrategy(),
             systemPrompt = """
                 You are a helpful financial assistant for a personal finance tracking app.
                 Your role is to help users understand their spending patterns, income, and overall financial health.
 
                 Today's date is $today.
+                This month's date range: from ${LocalDate(today.year, today.month, 1)} to $today.
+                Format all amounts using the user's currency symbol: $currencySymbol (do NOT use ${'$'} unless that IS the user's currency).
                 $historyContext
 
                 ## CRITICAL: Tool Selection Rules
@@ -132,12 +178,22 @@ class KoogAiService(
 
                 ## Guidelines
                 - Be concise and helpful
-                - Format money nicely (e.g., ${'$'}123.45)
+                - Format money using the currency symbol $currencySymbol (e.g., ${currencySymbol}123.45)
                 - If no results found, mention that the search was case-insensitive
                 - If you don't have enough data, let the user know
 
+                When the user asks to ADD, CREATE, or RECORD an expense or income:
+                → Use addExpense for expenses, addIncome for income.
+                  First get the categories list if unsure which category to use.
+
+                Examples:
+                - "Add a $50 dinner expense" → addExpense(amount=50.0, categoryName="Food", description="dinner")
+                - "Record $100 from investment" → addIncome(amount=100.0, categoryName="Investment")
+                - "Add income of 2000 salary" → addIncome(amount=2000.0, categoryName="Salary", incomeType="RECURRING")
+
                 ## Available Tools
                 ### Expense Tools
+                - addExpense: Add a new expense entry (amount, category, optional description/date)
                 - searchExpenses: Find expenses by keyword (case-insensitive)
                 - getTotalExpenses: Get total spending for a date range
                 - getExpensesByCategory: Get spending breakdown by category
@@ -146,6 +202,7 @@ class KoogAiService(
                 - getCategories: List available expense categories
 
                 ### Income Tools
+                - addIncome: Add a new income entry (amount, category, optional description/date/type)
                 - searchIncome: Find income by keyword (case-insensitive)
                 - getTotalIncome: Get total income for a date range
                 - getIncomeByCategory: Get income breakdown by category
@@ -156,21 +213,17 @@ class KoogAiService(
                 ### Financial Summary Tools
                 - getFinancialSummary: Get complete financial overview (income, expenses, net balance, savings rate)
             """.trimIndent(),
-            toolRegistry = chatToolRegistry,
+            toolRegistry = createToolRegistry(currencySymbol),
         )
     }
 
-    /**
-     * Creates a lightweight agent for category suggestion.
-     * Uses GPT5Nano - the most cost-effective model for simple classification tasks.
-     */
     private fun createCategorizationAgent(): AIAgent<String, String> {
-        val executor = promptExecutor
+        val executor = getExecutor()
             ?: throw IllegalStateException("AI service not configured - missing API key")
 
         return AIAgent(
             promptExecutor = executor,
-            llmModel = OpenAIModels.Chat.GPT5Nano,
+            llmModel = CloudModelRegistry.cheapestModel(aiConfig.cloudProvider),
             systemPrompt = """
                 You are a categorization assistant. Given a list of expense categories and an expense description,
                 you must respond with ONLY the name of the most appropriate category.
@@ -184,7 +237,7 @@ class KoogAiService(
         availableCategories: List<Category>,
     ): Category? {
         if (!isEnabled || description.isBlank()) return null
-        if (promptExecutor == null) return null
+        if (getExecutor() == null) return null
 
         val categoryNames = availableCategories.joinToString(", ") { it.name }
 
@@ -194,7 +247,6 @@ class KoogAiService(
                 val prompt = "Categories: [$categoryNames]\nExpense: \"$description\"\n\nCategory:"
                 val result = agent.run(prompt)
 
-                // Find matching category (case-insensitive)
                 availableCategories.find { category ->
                     category.name.equals(result.trim(), ignoreCase = true)
                 }
@@ -209,17 +261,22 @@ class KoogAiService(
         history: List<ChatMessage>,
     ): String {
         if (!isEnabled) {
-            return "AI features are not available. Please add your OpenAI API key to local.properties to enable AI features."
+            return "AI features are not available. Set up a cloud provider in Settings or download an on-device model."
         }
 
-        if (promptExecutor == null) {
+        if (getExecutor() == null) {
             return "AI service is not configured properly."
         }
 
         return withContext(Dispatchers.IO) {
             try {
-                val agent = createChatAgent(history)
-                agent.run(message)
+                val currencySymbol = getCurrencySymbol()
+                val agent = createChatAgent(history, currencySymbol)
+                withTimeout(45_000L) {
+                    agent.run(message)
+                }
+            } catch (e: TimeoutCancellationException) {
+                "Sorry, the request timed out. Please try again with a simpler question."
             } catch (e: Exception) {
                 "Sorry, I encountered an error: ${e.message ?: "Unknown error"}"
             }

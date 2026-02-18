@@ -5,8 +5,13 @@ import ai.koog.agents.core.tools.annotations.Tool
 import ai.koog.agents.core.tools.reflect.ToolSet
 import com.keisardev.insight.core.data.repository.IncomeCategoryRepository
 import com.keisardev.insight.core.data.repository.IncomeRepository
+import com.keisardev.insight.core.model.Income
+import com.keisardev.insight.core.model.IncomeType
 import kotlinx.coroutines.flow.first
+import kotlinx.datetime.Clock
 import kotlinx.datetime.LocalDate
+import kotlinx.datetime.TimeZone
+import kotlinx.datetime.toLocalDateTime
 
 /**
  * Koog tools for querying income data.
@@ -16,6 +21,7 @@ import kotlinx.datetime.LocalDate
 class IncomeTools(
     private val incomeRepository: IncomeRepository,
     private val incomeCategoryRepository: IncomeCategoryRepository,
+    private val currencySymbol: String = "$",
 ) : ToolSet {
 
     @Tool
@@ -28,9 +34,11 @@ class IncomeTools(
             val start = LocalDate.parse(startDate)
             val end = LocalDate.parse(endDate)
             val total = incomeRepository.observeMonthlyTotal(start, end).first()
-            "Total income from $startDate to $endDate: $${String.format("%.2f", total)}"
+            "Total income from $startDate to $endDate: ${currencySymbol}${String.format("%.2f", total)}"
+        } catch (e: IllegalArgumentException) {
+            "ERROR: Invalid date format. Use YYYY-MM-DD. You provided: startDate='$startDate', endDate='$endDate'"
         } catch (e: Exception) {
-            "Error getting total income: ${e.message}"
+            "ERROR: Failed to get total income: ${e.message}"
         }
     }
 
@@ -53,12 +61,14 @@ class IncomeTools(
                     .sortedByDescending { it.value }
                     .map { (category, amount) ->
                         val percentage = (amount / total * 100)
-                        "${category.name}: $${String.format("%.2f", amount)} (${String.format("%.1f", percentage)}%)"
+                        "${category.name}: ${currencySymbol}${String.format("%.2f", amount)} (${String.format("%.1f", percentage)}%)"
                     }
-                "Income by category from $startDate to $endDate:\n${lines.joinToString("\n")}\n\nTotal: $${String.format("%.2f", total)}"
+                "Income by category from $startDate to $endDate:\n${lines.joinToString("\n")}\n\nTotal: ${currencySymbol}${String.format("%.2f", total)}"
             }
+        } catch (e: IllegalArgumentException) {
+            "ERROR: Invalid date format. Use YYYY-MM-DD. You provided: startDate='$startDate', endDate='$endDate'"
         } catch (e: Exception) {
-            "Error getting income by category: ${e.message}"
+            "ERROR: Failed to get income by category: ${e.message}"
         }
     }
 
@@ -69,7 +79,7 @@ class IncomeTools(
             val categories = incomeCategoryRepository.observeAllCategories().first()
             "Available income categories: ${categories.joinToString(", ") { it.name }}"
         } catch (e: Exception) {
-            "Error getting income categories: ${e.message}"
+            "ERROR: Failed to get income categories: ${e.message}"
         }
     }
 
@@ -86,12 +96,12 @@ class IncomeTools(
                 "No income recorded yet."
             } else {
                 val lines = incomes.map { income ->
-                    "- ${income.date}: ${income.category.name} (${income.incomeType.displayName}) - $${String.format("%.2f", income.amount)} ${if (income.description.isNotBlank()) "(${income.description})" else ""}"
+                    "- ${income.date}: ${income.category.name} (${income.incomeType.displayName}) - ${currencySymbol}${String.format("%.2f", income.amount)} ${if (income.description.isNotBlank()) "(${income.description})" else ""}"
                 }
                 "Recent income:\n${lines.joinToString("\n")}"
             }
         } catch (e: Exception) {
-            "Error getting recent income: ${e.message}"
+            "ERROR: Failed to get recent income: ${e.message}"
         }
     }
 
@@ -110,12 +120,14 @@ class IncomeTools(
                 "No income found from $startDate to $endDate."
             } else {
                 val lines = incomes.map { income ->
-                    "- ${income.date}: ${income.category.name} (${income.incomeType.displayName}) - $${String.format("%.2f", income.amount)} ${if (income.description.isNotBlank()) "(${income.description})" else ""}"
+                    "- ${income.date}: ${income.category.name} (${income.incomeType.displayName}) - ${currencySymbol}${String.format("%.2f", income.amount)} ${if (income.description.isNotBlank()) "(${income.description})" else ""}"
                 }
                 "Income from $startDate to $endDate:\n${lines.joinToString("\n")}"
             }
+        } catch (e: IllegalArgumentException) {
+            "ERROR: Invalid date format. Use YYYY-MM-DD. You provided: startDate='$startDate', endDate='$endDate'"
         } catch (e: Exception) {
-            "Error getting income: ${e.message}"
+            "ERROR: Failed to get income: ${e.message}"
         }
     }
 
@@ -141,12 +153,60 @@ class IncomeTools(
             } else {
                 val total = matchingIncome.sumOf { it.amount }
                 val lines = matchingIncome.map { income ->
-                    "- ${income.date}: ${income.category.name} (${income.incomeType.displayName}) - $${String.format("%.2f", income.amount)} ${if (income.description.isNotBlank()) "(${income.description})" else ""}"
+                    "- ${income.date}: ${income.category.name} (${income.incomeType.displayName}) - ${currencySymbol}${String.format("%.2f", income.amount)} ${if (income.description.isNotBlank()) "(${income.description})" else ""}"
                 }
-                "Found ${matchingIncome.size} income entry/entries matching '$keyword':\n${lines.joinToString("\n")}\n\nTotal income from '$keyword': $${String.format("%.2f", total)}"
+                "Found ${matchingIncome.size} income entry/entries matching '$keyword':\n${lines.joinToString("\n")}\n\nTotal income from '$keyword': ${currencySymbol}${String.format("%.2f", total)}"
             }
         } catch (e: Exception) {
-            "Error searching income: ${e.message}"
+            "ERROR: Failed to search income: ${e.message}"
+        }
+    }
+
+    @Tool
+    @LLMDescription(
+        "Add a new income entry to the user's tracker. Use this when the user asks to add, create, or record income. " +
+            "Requires amount, category name, and optionally a description and date. " +
+            "The category must match one of the available income categories (case-insensitive). " +
+            "If no date is provided, today's date is used. If no incomeType is provided, defaults to ONE_TIME.",
+    )
+    suspend fun addIncome(
+        @LLMDescription("The income amount as a number (e.g. 100.0)") amount: Double,
+        @LLMDescription("The income category name (must match an existing category, case-insensitive). Examples: 'Salary', 'Investment', 'Freelance'")
+        categoryName: String,
+        @LLMDescription("Optional description for the income entry") description: String = "",
+        @LLMDescription("Optional date in YYYY-MM-DD format. Defaults to today if not provided.") date: String = "",
+        @LLMDescription("Income type: 'RECURRING' or 'ONE_TIME'. Defaults to ONE_TIME.") incomeType: String = "ONE_TIME",
+    ): String {
+        return try {
+            val categories = incomeCategoryRepository.observeAllCategories().first()
+            val category = categories.find { it.name.equals(categoryName, ignoreCase = true) }
+                ?: return "ERROR: Category '$categoryName' not found. Available categories: ${categories.joinToString(", ") { it.name }}"
+
+            val incomeDate = if (date.isNotBlank()) {
+                LocalDate.parse(date)
+            } else {
+                Clock.System.now().toLocalDateTime(TimeZone.currentSystemDefault()).date
+            }
+
+            val type = when (incomeType.uppercase()) {
+                "RECURRING" -> IncomeType.RECURRING
+                else -> IncomeType.ONE_TIME
+            }
+
+            val income = Income(
+                amount = amount,
+                incomeType = type,
+                category = category,
+                description = description,
+                date = incomeDate,
+                createdAt = Clock.System.now(),
+            )
+            incomeRepository.insertIncome(income)
+            "Successfully added income: ${currencySymbol}${String.format("%.2f", amount)} in ${category.name} on $incomeDate${if (description.isNotBlank()) " ($description)" else ""}"
+        } catch (e: IllegalArgumentException) {
+            "ERROR: Invalid date format. Use YYYY-MM-DD. You provided: '$date'"
+        } catch (e: Exception) {
+            "ERROR: Failed to add income: ${e.message}"
         }
     }
 }

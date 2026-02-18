@@ -13,5 +13,6 @@ interface ModelRepository {
     fun cancelDownload()
     fun refreshModelStatus()
     suspend fun searchModels(query: String)
-    suspend fun deleteCurrentModel()
+    suspend fun deleteModel(fileName: String)
+    suspend fun setActiveModel(fileName: String)
 }

@@ -193,7 +193,7 @@ Recommended models: Phi-2 Q4_0 (~1.6 GB) for chat, any small model for categoriz
 ## License
 
 ```
-Copyright 2024 Keisardev
+Copyright 2025 Keisardev
 
 Licensed under the Apache License, Version 2.0 (the "License");
 you may not use this file except in compliance with the License.

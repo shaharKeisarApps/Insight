@@ -16,12 +16,15 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.KeyboardArrowRight
 import androidx.compose.material.icons.filled.AttachMoney
 import androidx.compose.material.icons.filled.Category
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Cloud
+import androidx.compose.material.icons.filled.CurrencyExchange
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.Info
 import androidx.compose.material.icons.filled.PhoneAndroid
@@ -64,8 +67,10 @@ import com.keisardev.insight.core.data.repository.ExpenseRepository
 import com.keisardev.insight.core.data.repository.IncomeCategoryRepository
 import com.keisardev.insight.core.data.repository.IncomeRepository
 import com.keisardev.insight.core.designsystem.theme.InsightTheme
+import com.keisardev.insight.core.model.CloudModelOption
 import com.keisardev.insight.core.model.ModelInfo
 import com.keisardev.insight.core.model.ModelState
+import com.keisardev.insight.core.ui.component.CloudSetupBottomSheet
 import com.keisardev.insight.core.ui.component.ModelSetupBanner
 import com.keisardev.insight.core.ui.component.ModelSetupBottomSheet
 import com.keisardev.insight.core.ui.util.AVAILABLE_CURRENCIES
@@ -99,6 +104,14 @@ data object SettingsScreen : Screen {
         val currencyCode: String,
         val showCurrencyPicker: Boolean,
         val categoryCount: Int,
+        val showCloudSetup: Boolean,
+        val cloudProvider: String,
+        val cloudApiKey: String,
+        val cloudModelId: String,
+        val cloudModels: List<CloudModelOption>,
+        val isDevKeyAvailable: Boolean,
+        val useDevKey: Boolean,
+        val getModelsForProvider: (String) -> List<CloudModelOption>,
         val eventSink: (Event) -> Unit,
     ) : CircuitUiState
 
@@ -113,11 +126,20 @@ data object SettingsScreen : Screen {
         data object OnCancelDownload : Event
         data class OnSearchQueryChange(val query: String) : Event
         data object OnSearch : Event
-        data object OnDeleteModel : Event
+        data class OnDeleteModel(val fileName: String) : Event
         data object OnChangeModel : Event
+        data class OnSelectActiveModel(val fileName: String) : Event
         data object OnCurrencyClick : Event
         data class OnCurrencySelect(val currencyCode: String) : Event
         data object OnDismissCurrencyPicker : Event
+        data object OnShowCloudSetup : Event
+        data object OnDismissCloudSetup : Event
+        data class OnSaveCloudSettings(
+            val provider: String,
+            val apiKey: String,
+            val modelId: String,
+        ) : Event
+        data object OnActivateDevKey : Event
     }
 }
 
@@ -140,6 +162,7 @@ class SettingsPresenter(
         var showModelSetup by rememberRetained { mutableStateOf(false) }
         var showModelSelection by rememberRetained { mutableStateOf(false) }
         var showCurrencyPicker by rememberRetained { mutableStateOf(false) }
+        var showCloudSetup by rememberRetained { mutableStateOf(false) }
         var searchQuery by rememberRetained { mutableStateOf("") }
         val aiMode by aiServiceStrategy.observeAiMode()
             .collectAsRetainedState(initial = aiServiceStrategy.mode)
@@ -157,6 +180,9 @@ class SettingsPresenter(
             .collectAsRetainedState(initial = emptyList())
         val scope = rememberCoroutineScope()
 
+        val cloudProvider = settings.cloudSettings.provider.name
+        val cloudModels = aiServiceStrategy.getAvailableCloudModels(cloudProvider)
+
         return SettingsScreen.State(
             showClearDataConfirmation = showConfirmation,
             aiMode = aiMode,
@@ -172,6 +198,14 @@ class SettingsPresenter(
             currencyCode = settings.currencyCode,
             showCurrencyPicker = showCurrencyPicker,
             categoryCount = expenseCategories.size + incomeCategories.size,
+            showCloudSetup = showCloudSetup,
+            cloudProvider = cloudProvider,
+            cloudApiKey = settings.cloudSettings.apiKey,
+            cloudModelId = settings.cloudSettings.selectedModelId,
+            cloudModels = cloudModels,
+            isDevKeyAvailable = aiServiceStrategy.hasDevKey,
+            useDevKey = settings.cloudSettings.useDevKey,
+            getModelsForProvider = { aiServiceStrategy.getAvailableCloudModels(it) },
         ) { event ->
             when (event) {
                 SettingsScreen.Event.OnClearDataClick -> {
@@ -219,9 +253,14 @@ class SettingsPresenter(
                         modelRepository.searchModels(searchQuery)
                     }
                 }
-                SettingsScreen.Event.OnDeleteModel -> {
+                is SettingsScreen.Event.OnDeleteModel -> {
                     scope.launch {
-                        modelRepository.deleteCurrentModel()
+                        modelRepository.deleteModel(event.fileName)
+                    }
+                }
+                is SettingsScreen.Event.OnSelectActiveModel -> {
+                    scope.launch {
+                        modelRepository.setActiveModel(event.fileName)
                     }
                 }
                 SettingsScreen.Event.OnChangeModel -> {
@@ -239,6 +278,37 @@ class SettingsPresenter(
                 SettingsScreen.Event.OnDismissCurrencyPicker -> {
                     showCurrencyPicker = false
                 }
+                SettingsScreen.Event.OnShowCloudSetup -> {
+                    showCloudSetup = true
+                }
+                SettingsScreen.Event.OnDismissCloudSetup -> {
+                    showCloudSetup = false
+                }
+                is SettingsScreen.Event.OnSaveCloudSettings -> {
+                    scope.launch {
+                        val providerProto = when (event.provider) {
+                            "GEMINI" -> UserSettings.CloudProviderProto.GEMINI
+                            else -> UserSettings.CloudProviderProto.OPENAI
+                        }
+                        userSettingsRepository.updateCloudSettings(
+                            UserSettings.CloudSettings(
+                                provider = providerProto,
+                                apiKey = event.apiKey,
+                                selectedModelId = event.modelId,
+                                useDevKey = settings.cloudSettings.useDevKey,
+                            ),
+                        )
+                        aiServiceStrategy.refreshCloudConfig()
+                    }
+                    showCloudSetup = false
+                }
+                SettingsScreen.Event.OnActivateDevKey -> {
+                    scope.launch {
+                        val newValue = !settings.cloudSettings.useDevKey
+                        userSettingsRepository.updateUseDevKey(newValue)
+                        aiServiceStrategy.refreshCloudConfig()
+                    }
+                }
             }
         }
     }
@@ -254,6 +324,7 @@ fun SettingsUi(state: SettingsScreen.State, modifier: Modifier = Modifier) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
+                .verticalScroll(rememberScrollState())
                 .padding(16.dp),
         ) {
             Text(
@@ -282,6 +353,19 @@ fun SettingsUi(state: SettingsScreen.State, modifier: Modifier = Modifier) {
                         subtitle = currencyDisplayName(state.currencyCode),
                         onClick = { state.eventSink(SettingsScreen.Event.OnCurrencyClick) },
                     )
+                    HorizontalDivider()
+                    SettingsItem(
+                        icon = Icons.Default.CurrencyExchange,
+                        title = "Multi-Currency Tracking",
+                        subtitle = "Track items in different currencies \u2014 Coming Soon",
+                        onClick = {
+                            scope.launch {
+                                snackbarHostState.showSnackbar(
+                                    "Multi-currency tracking with conversion is coming in a future update"
+                                )
+                            }
+                        },
+                    )
                 }
             }
 
@@ -292,8 +376,13 @@ fun SettingsUi(state: SettingsScreen.State, modifier: Modifier = Modifier) {
                 isLocalAvailable = state.isLocalModelAvailable,
                 isCloudAvailable = state.isCloudAvailable,
                 modelState = state.modelState,
+                cloudProvider = state.cloudProvider,
+                cloudModelId = state.cloudModelId,
+                cloudModels = state.cloudModels,
+                useDevKey = state.useDevKey,
                 onModeChange = { state.eventSink(SettingsScreen.Event.OnAiModeChange(it)) },
                 onManageModel = { state.eventSink(SettingsScreen.Event.OnShowModelSetup) },
+                onConfigureCloud = { state.eventSink(SettingsScreen.Event.OnShowCloudSetup) },
             )
 
             // Model setup banner — show when no local model and not in cloud-only mode
@@ -322,16 +411,16 @@ fun SettingsUi(state: SettingsScreen.State, modifier: Modifier = Modifier) {
                 SettingsItem(
                     icon = Icons.Default.Info,
                     title = "About",
-                    subtitle = "Version 1.0.0",
+                    subtitle = "Version 0.1.0",
                     onClick = {
                         scope.launch {
-                            snackbarHostState.showSnackbar("Insight v1.0.0")
+                            snackbarHostState.showSnackbar("Insight v0.1.0")
                         }
                     },
                 )
             }
 
-            Spacer(modifier = Modifier.weight(1f))
+            Spacer(modifier = Modifier.height(24.dp))
 
             Text(
                 text = "Built with Circuit + Metro DI",
@@ -430,8 +519,26 @@ fun SettingsUi(state: SettingsScreen.State, modifier: Modifier = Modifier) {
             onCancel = { state.eventSink(SettingsScreen.Event.OnCancelDownload) },
             onSearchQueryChange = { state.eventSink(SettingsScreen.Event.OnSearchQueryChange(it)) },
             onSearch = { state.eventSink(SettingsScreen.Event.OnSearch) },
-            onDeleteModel = { state.eventSink(SettingsScreen.Event.OnDeleteModel) },
+            onDeleteModel = { fileName -> state.eventSink(SettingsScreen.Event.OnDeleteModel(fileName)) },
             onChangeModel = { state.eventSink(SettingsScreen.Event.OnChangeModel) },
+            onSelectActiveModel = { fileName -> state.eventSink(SettingsScreen.Event.OnSelectActiveModel(fileName)) },
+        )
+    }
+
+    // Cloud setup bottom sheet
+    if (state.showCloudSetup) {
+        CloudSetupBottomSheet(
+            provider = state.cloudProvider,
+            apiKey = state.cloudApiKey,
+            selectedModelId = state.cloudModelId,
+            getModelsForProvider = state.getModelsForProvider,
+            isDevKeyAvailable = state.isDevKeyAvailable,
+            useDevKey = state.useDevKey,
+            onDismiss = { state.eventSink(SettingsScreen.Event.OnDismissCloudSetup) },
+            onSave = { provider, apiKey, modelId ->
+                state.eventSink(SettingsScreen.Event.OnSaveCloudSettings(provider, apiKey, modelId))
+            },
+            onActivateDevKey = { state.eventSink(SettingsScreen.Event.OnActivateDevKey) },
         )
     }
 }
@@ -443,8 +550,13 @@ private fun AiEngineCard(
     isLocalAvailable: Boolean,
     isCloudAvailable: Boolean,
     modelState: ModelState,
+    cloudProvider: String,
+    cloudModelId: String,
+    cloudModels: List<CloudModelOption>,
+    useDevKey: Boolean,
     onModeChange: (AiMode) -> Unit,
     onManageModel: () -> Unit,
+    onConfigureCloud: () -> Unit,
     modifier: Modifier = Modifier,
 ) {
     Card(
@@ -529,15 +641,26 @@ private fun AiEngineCard(
             }
 
             // Status description
+            val cloudStatusText = if (isCloudAvailable) {
+                val providerDisplay = when (cloudProvider) {
+                    "GEMINI" -> "Gemini"
+                    else -> "OpenAI"
+                }
+                val modelDisplay = cloudModels.find { it.id == cloudModelId }?.displayName
+                    ?: "Default"
+                if (useDevKey) {
+                    "Using $providerDisplay \u2014 $modelDisplay (dev key)"
+                } else {
+                    "Using $providerDisplay \u2014 $modelDisplay"
+                }
+            } else {
+                "Tap Configure Cloud to set up"
+            }
             val statusText = when (modelState) {
                 is ModelState.Downloading -> null // Already shown above
                 is ModelState.Ready -> when (aiMode) {
                     AiMode.LOCAL -> "On-device model ready \u2014 ${modelState.modelName}"
-                    AiMode.CLOUD -> if (isCloudAvailable) {
-                        "Using OpenAI cloud API"
-                    } else {
-                        "Cloud API not configured \u2014 add API key to local.properties"
-                    }
+                    AiMode.CLOUD -> cloudStatusText
                     AiMode.AUTO -> "On-device model ready \u2014 cloud as fallback"
                 }
                 is ModelState.Error -> "Download failed: ${modelState.message}"
@@ -547,11 +670,7 @@ private fun AiEngineCard(
                     } else {
                         "No local model \u2014 download one from AI Chat"
                     }
-                    AiMode.CLOUD -> if (isCloudAvailable) {
-                        "Using OpenAI cloud API"
-                    } else {
-                        "Cloud API not configured \u2014 add API key to local.properties"
-                    }
+                    AiMode.CLOUD -> cloudStatusText
                     AiMode.AUTO -> when {
                         isLocalAvailable -> "On-device model active \u2014 cloud as fallback"
                         isCloudAvailable -> "Cloud API active \u2014 no local model found"
@@ -591,6 +710,13 @@ private fun AiEngineCard(
             if (modelState is ModelState.Ready) {
                 TextButton(onClick = onManageModel) {
                     Text("Manage Model")
+                }
+            }
+
+            // Configure Cloud button when mode is CLOUD or AUTO
+            if (aiMode == AiMode.CLOUD || aiMode == AiMode.AUTO) {
+                TextButton(onClick = onConfigureCloud) {
+                    Text("Configure Cloud")
                 }
             }
         }
@@ -672,6 +798,16 @@ private fun PreviewSettingsUi() {
                 currencyCode = "USD",
                 showCurrencyPicker = false,
                 categoryCount = 14,
+                showCloudSetup = false,
+                cloudProvider = "OPENAI",
+                cloudApiKey = "",
+                cloudModelId = "gpt-4o-mini",
+                cloudModels = listOf(
+                    CloudModelOption("gpt-4o-mini", "GPT-4o Mini", "Fast and affordable"),
+                ),
+                isDevKeyAvailable = false,
+                useDevKey = false,
+                getModelsForProvider = { emptyList() },
                 eventSink = {},
             )
         )
@@ -698,6 +834,14 @@ private fun PreviewSettingsUiWithDialog() {
                 currencyCode = "USD",
                 showCurrencyPicker = false,
                 categoryCount = 14,
+                showCloudSetup = false,
+                cloudProvider = "OPENAI",
+                cloudApiKey = "sk-test123",
+                cloudModelId = "gpt-4o-mini",
+                cloudModels = emptyList(),
+                isDevKeyAvailable = false,
+                useDevKey = false,
+                getModelsForProvider = { emptyList() },
                 eventSink = {},
             )
         )

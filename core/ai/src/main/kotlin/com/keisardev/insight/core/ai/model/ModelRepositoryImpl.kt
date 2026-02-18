@@ -2,6 +2,8 @@ package com.keisardev.insight.core.ai.model
 
 import android.app.Application
 import com.keisardev.insight.core.common.di.AppScope
+import com.keisardev.insight.core.data.datastore.UserSettingsRepository
+import com.keisardev.insight.core.model.InstalledModel
 import com.keisardev.insight.core.model.ModelInfo
 import com.keisardev.insight.core.model.ModelState
 import dev.zacsweers.metro.ContributesBinding
@@ -15,12 +17,15 @@ import io.ktor.http.contentLength
 import io.ktor.utils.io.readAvailable
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
 import org.json.JSONArray
 import java.io.File
+import java.io.IOException
 
 @ContributesBinding(AppScope::class)
 @SingleIn(AppScope::class)
@@ -28,13 +33,15 @@ import java.io.File
 class ModelRepositoryImpl(
     private val application: Application,
     private val httpClient: HttpClient,
+    private val userSettingsRepository: UserSettingsRepository,
 ) : ModelRepository {
 
     private val modelsDir = File(application.filesDir, "models")
     private val _modelState = MutableStateFlow<ModelState>(ModelState.NotInstalled)
     private val _searchResults = MutableStateFlow<List<ModelInfo>>(emptyList())
     private val _isSearching = MutableStateFlow(false)
-    private var downloadJob: Job? = null
+    @Volatile private var downloadJob: Job? = null
+    @Volatile private var _activeModelFileName: String = ""
 
     override val modelState: StateFlow<ModelState> = _modelState.asStateFlow()
     override val searchResults: StateFlow<List<ModelInfo>> = _searchResults.asStateFlow()
@@ -92,31 +99,68 @@ class ModelRepositoryImpl(
     )
 
     init {
+        // Load persisted active model preference before first refresh
+        try {
+            _activeModelFileName = runBlocking {
+                userSettingsRepository.observeSettings().first().activeModelFileName
+            }
+        } catch (_: Exception) { /* keep default empty */ }
         refreshModelStatus()
     }
 
     override fun refreshModelStatus() {
         val currentState = _modelState.value
         if (currentState is ModelState.Downloading) return
+        doRefreshModelStatus()
+    }
 
+    /**
+     * Unconditionally refreshes model status, bypassing the Downloading guard.
+     * Used after download completion to avoid emitting a transient NotInstalled
+     * state that could cause the foreground service to stopSelf() prematurely.
+     */
+    private fun doRefreshModelStatus() {
         modelsDir.mkdirs()
-        val modelFile = modelsDir.listFiles()?.firstOrNull { it.extension == "gguf" }
-        _modelState.value = if (modelFile != null) {
-            ModelState.Ready(
-                modelName = modelFile.nameWithoutExtension,
-                filePath = modelFile.absolutePath,
-                sizeBytes = modelFile.length(),
-            )
-        } else {
-            ModelState.NotInstalled
+        val modelFiles = modelsDir.listFiles()?.filter { it.extension == "gguf" } ?: emptyList()
+
+        if (modelFiles.isEmpty()) {
+            _modelState.value = ModelState.NotInstalled
+            return
         }
+
+        val activeFileName = _activeModelFileName
+
+        val installedModels = modelFiles.map { file ->
+            InstalledModel(
+                fileName = file.name,
+                displayName = file.nameWithoutExtension,
+                filePath = file.absolutePath,
+                sizeBytes = file.length(),
+                isActive = file.name == activeFileName,
+            )
+        }
+
+        // If no active model set or the active one doesn't exist, default to first
+        val effectiveActive = if (installedModels.any { it.isActive }) {
+            installedModels
+        } else {
+            val first = installedModels.first()
+            installedModels.map { it.copy(isActive = it.fileName == first.fileName) }
+        }
+
+        val activeModel = effectiveActive.first { it.isActive }
+
+        _modelState.value = ModelState.Ready(
+            modelName = activeModel.displayName,
+            filePath = activeModel.filePath,
+            sizeBytes = activeModel.sizeBytes,
+            installedModels = effectiveActive,
+            activeModelFileName = activeModel.fileName,
+        )
     }
 
     override suspend fun startDownload(model: ModelInfo) {
         if (_modelState.value is ModelState.Downloading) return
-
-        // Delete existing model before downloading new one
-        deleteExistingModel()
 
         _modelState.value = ModelState.Downloading(
             progress = 0f,
@@ -157,17 +201,20 @@ class ModelRepositoryImpl(
                         }
                     }
 
-                    tempFile.renameTo(targetFile)
-                    _modelState.value = ModelState.Ready(
-                        modelName = model.name,
-                        filePath = targetFile.absolutePath,
-                        sizeBytes = targetFile.length(),
-                    )
+                    // Delete existing target to ensure renameTo succeeds (re-downloads)
+                    if (targetFile.exists()) targetFile.delete()
+                    if (!tempFile.renameTo(targetFile)) {
+                        throw IOException("Failed to move downloaded model to final location")
+                    }
+                    _activeModelFileName = model.fileName
+                    try { userSettingsRepository.updateActiveModel(model.fileName) } catch (_: Exception) {}
+                    // Directly refresh, bypassing the Downloading guard — no transient state
+                    doRefreshModelStatus()
                 }
             } catch (e: Exception) {
                 tempFile.delete()
                 if (e is kotlinx.coroutines.CancellationException) {
-                    _modelState.value = ModelState.NotInstalled
+                    doRefreshModelStatus()
                 } else {
                     _modelState.value = ModelState.Error(e.message ?: "Download failed")
                 }
@@ -181,7 +228,7 @@ class ModelRepositoryImpl(
 
         // Clean up partial file
         modelsDir.listFiles()?.filter { it.extension == "tmp" }?.forEach { it.delete() }
-        _modelState.value = ModelState.NotInstalled
+        refreshModelStatus()
     }
 
     override suspend fun searchModels(query: String) {
@@ -204,17 +251,23 @@ class ModelRepositoryImpl(
         }
     }
 
-    override suspend fun deleteCurrentModel() {
+    override suspend fun deleteModel(fileName: String) {
         withContext(Dispatchers.IO) {
-            deleteExistingModel()
+            val file = File(modelsDir, fileName)
+            if (file.exists()) file.delete()
         }
-        _modelState.value = ModelState.NotInstalled
+        // If we deleted the active model, clear the preference
+        if (_activeModelFileName == fileName) {
+            _activeModelFileName = ""
+            userSettingsRepository.updateActiveModel("")
+        }
+        refreshModelStatus()
     }
 
-    private fun deleteExistingModel() {
-        modelsDir.listFiles()
-            ?.filter { it.extension == "gguf" || it.extension == "tmp" }
-            ?.forEach { it.delete() }
+    override suspend fun setActiveModel(fileName: String) {
+        _activeModelFileName = fileName
+        userSettingsRepository.updateActiveModel(fileName)
+        refreshModelStatus()
     }
 
     private fun parseSearchResults(json: String): List<ModelInfo> {

@@ -12,6 +12,7 @@ import com.keisardev.insight.InsightApp
 import com.keisardev.insight.R
 import com.keisardev.insight.core.ai.model.ModelRepository
 import com.keisardev.insight.core.model.ModelState
+import android.os.SystemClock
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
@@ -30,22 +31,42 @@ class ModelDownloadService : Service() {
         startForeground(NOTIFICATION_ID, createProgressNotification(0f))
 
         serviceScope.launch {
+            // Track whether we've seen a Downloading state. The service may start
+            // before startDownload() is called, so the initial state could be Ready
+            // or NotInstalled — we must ignore those until a download actually begins.
+            var seenDownloading = false
+            var lastNotifiedPercent = -1
+            var lastNotifyTime = 0L
             modelRepository.modelState.collect { state ->
                 when (state) {
                     is ModelState.Downloading -> {
-                        updateNotification(createProgressNotification(state.progress))
+                        seenDownloading = true
+                        val percent = (state.progress * 100).toInt()
+                        val now = SystemClock.elapsedRealtime()
+                        // Throttle: update at most once per second and only when percent changes
+                        if (percent != lastNotifiedPercent && (now - lastNotifyTime >= 1000L || percent >= 100)) {
+                            lastNotifiedPercent = percent
+                            lastNotifyTime = now
+                            updateNotification(createProgressNotification(state.progress))
+                        }
                     }
                     is ModelState.Ready -> {
-                        updateNotification(createCompleteNotification())
-                        stopSelf()
+                        if (seenDownloading) {
+                            updateNotification(createCompleteNotification())
+                            stopSelf()
+                        }
                     }
                     is ModelState.Error -> {
-                        updateNotification(createErrorNotification(state.message))
-                        stopSelf()
+                        if (seenDownloading) {
+                            updateNotification(createErrorNotification(state.message))
+                            stopSelf()
+                        }
                     }
                     ModelState.NotInstalled -> {
-                        // Cancelled
-                        stopSelf()
+                        if (seenDownloading) {
+                            // Cancelled
+                            stopSelf()
+                        }
                     }
                 }
             }
