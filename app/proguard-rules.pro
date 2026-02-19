@@ -32,6 +32,20 @@
 -dontwarn io.ktor.**
 -keep class io.ktor.** { *; }
 
+# Netty / Reactor / Log4j transitive deps (from Ktor/Koog, not needed on Android)
+-dontwarn io.micrometer.context.ContextAccessor
+-dontwarn javax.enterprise.inject.spi.Extension
+-dontwarn okhttp3.internal.Util
+-dontwarn org.apache.log4j.Level
+-dontwarn org.apache.log4j.Logger
+-dontwarn org.apache.log4j.Priority
+-dontwarn org.apache.logging.log4j.LogManager
+-dontwarn org.apache.logging.log4j.Logger
+-dontwarn org.apache.logging.log4j.message.MessageFactory
+-dontwarn org.apache.logging.log4j.spi.ExtendedLogger
+-dontwarn org.apache.logging.log4j.spi.ExtendedLoggerWrapper
+-dontwarn reactor.blockhound.integration.BlockHoundIntegration
+
 # Coroutines
 -keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
 -keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
