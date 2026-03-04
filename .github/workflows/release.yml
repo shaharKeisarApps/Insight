@@ -68,7 +68,7 @@ jobs:
         run: rm -f ${{ github.workspace }}/release.keystore
 
       - name: Upload release APK
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-apk
           path: app/build/outputs/apk/release/*.apk
@@ -76,7 +76,7 @@ jobs:
           retention-days: 30
 
       - name: Upload release AAB
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: release-aab
           path: app/build/outputs/bundle/release/*.aab
@@ -84,7 +84,7 @@ jobs:
           retention-days: 30
 
       - name: Upload R8 mapping
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: r8-mapping
           path: app/build/outputs/mapping/release/mapping.txt
