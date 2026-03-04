@@ -67,6 +67,10 @@ android {
                 "proguard-rules.pro"
             )
             signingConfig = signingConfigs.getByName("release")
+            // Only ship ARM ABIs in release — x86/x86_64 are emulator-only
+            ndk {
+                abiFilters += listOf("arm64-v8a", "armeabi-v7a")
+            }
         }
         create("benchmark") {
             initWith(getByName("release"))

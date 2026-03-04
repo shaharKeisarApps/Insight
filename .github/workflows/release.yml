@@ -50,28 +50,54 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v5
 
-      - name: Decode keystore
+      - name: Setup signing
+        id: signing
         env:
           KEYSTORE_BASE64: ${{ secrets.KEYSTORE_BASE64 }}
-        run: echo "$KEYSTORE_BASE64" | base64 --decode > ${{ github.workspace }}/release.keystore
+        run: |
+          if [ -n "$KEYSTORE_BASE64" ]; then
+            echo "Using release signing keys"
+            echo "$KEYSTORE_BASE64" | base64 --decode > ${{ github.workspace }}/release.keystore
+            echo "signing=release" >> "$GITHUB_OUTPUT"
+          else
+            echo "No signing secrets found, generating CI keystore"
+            keytool -genkeypair \
+              -alias ci \
+              -keyalg RSA -keysize 2048 \
+              -validity 1 \
+              -dname "CN=CI Build" \
+              -keystore ${{ github.workspace }}/release.keystore \
+              -storepass cibuilds \
+              -keypass cibuilds \
+              -noprompt
+            echo "signing=ci" >> "$GITHUB_OUTPUT"
+          fi
 
       - name: Build release APK and AAB
         env:
           KEYSTORE_PATH: ${{ github.workspace }}/release.keystore
-          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD }}
-          KEY_ALIAS: ${{ secrets.KEY_ALIAS }}
-          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD }}
+          KEYSTORE_PASSWORD: ${{ secrets.KEYSTORE_PASSWORD || 'cibuilds' }}
+          KEY_ALIAS: ${{ secrets.KEY_ALIAS || 'ci' }}
+          KEY_PASSWORD: ${{ secrets.KEY_PASSWORD || 'cibuilds' }}
         run: ./gradlew assembleRelease bundleRelease --no-daemon
 
       - name: Clean up keystore
         if: always()
         run: rm -f ${{ github.workspace }}/release.keystore
 
+      - name: Rename APK with version
+        run: |
+          VERSION="${GITHUB_REF_NAME#v}"
+          APK=$(find app/build/outputs/apk/release -name '*.apk' | head -1)
+          if [ -n "$APK" ]; then
+            cp "$APK" "app/build/outputs/apk/release/Insight-v${VERSION}.apk"
+          fi
+
       - name: Upload release APK
         uses: actions/upload-artifact@v7
         with:
           name: release-apk
-          path: app/build/outputs/apk/release/*.apk
+          path: app/build/outputs/apk/release/Insight-*.apk
           if-no-files-found: error
           retention-days: 30
 
@@ -128,9 +154,7 @@ jobs:
         id: changelog
         run: |
           VERSION="${{ steps.version.outputs.VERSION }}"
-          # Extract the section for this version from CHANGELOG.md
           BODY=$(sed -n "/^## \[${VERSION}\]/,/^## \[/{ /^## \[${VERSION}\]/d; /^## \[/d; p; }" CHANGELOG.md)
-          # Use EOF delimiter for multiline output
           {
             echo "BODY<<EOF"
             echo "$BODY"
