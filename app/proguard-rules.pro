@@ -1,15 +1,9 @@
-# Add project specific ProGuard rules here.
-# You can control the set of applied configuration files using the
-# proguardFiles setting in build.gradle.
-#
-# For more details, see
-#   http://developer.android.com/guide/developing/tools/proguard.html
-
-# Preserve line numbers for debugging crash reports
+# ── Debugging ─────────────────────────────────────────────────────
+# Preserve line numbers for crash reports
 -keepattributes SourceFile,LineNumberTable
 -renamesourcefileattribute SourceFile
 
-# Kotlin serialization
+# ── Kotlin Serialization ─────────────────────────────────────────
 -keepattributes *Annotation*, InnerClasses
 -dontnote kotlinx.serialization.AnnotationsKt
 
@@ -27,28 +21,31 @@
     kotlinx.serialization.KSerializer serializer(...);
 }
 
-# Ktor / OkHttp (used by Koog)
+# ── Ktor Client (keep only what's needed at runtime) ─────────────
 -dontwarn org.slf4j.**
 -dontwarn io.ktor.**
--keep class io.ktor.** { *; }
+-keep class io.ktor.client.engine.** { *; }
+-keep class io.ktor.serialization.** { *; }
 
-# Netty / Reactor / Log4j transitive deps (from Ktor/Koog, not needed on Android)
+# ── Transitive deps not needed on Android ────────────────────────
 -dontwarn io.micrometer.context.ContextAccessor
 -dontwarn javax.enterprise.inject.spi.Extension
 -dontwarn okhttp3.internal.Util
--dontwarn org.apache.log4j.Level
--dontwarn org.apache.log4j.Logger
--dontwarn org.apache.log4j.Priority
--dontwarn org.apache.logging.log4j.LogManager
--dontwarn org.apache.logging.log4j.Logger
--dontwarn org.apache.logging.log4j.message.MessageFactory
--dontwarn org.apache.logging.log4j.spi.ExtendedLogger
--dontwarn org.apache.logging.log4j.spi.ExtendedLoggerWrapper
+-dontwarn org.apache.log4j.**
+-dontwarn org.apache.logging.log4j.**
 -dontwarn reactor.blockhound.integration.BlockHoundIntegration
 
-# Coroutines
+# ── Coroutines ───────────────────────────────────────────────────
 -keepnames class kotlinx.coroutines.internal.MainDispatcherFactory {}
 -keepnames class kotlinx.coroutines.CoroutineExceptionHandler {}
 
-# SQLDelight
--keep class app.cash.sqldelight.** { *; }
+# ── SQLDelight (keep generated query interfaces + adapters) ──────
+-keep class app.cash.sqldelight.driver.** { *; }
+-keep class com.keisardev.insight.core.database.** { *; }
+
+# ── Llamatik / llama.cpp JNI ─────────────────────────────────────
+-keep class com.llamatik.** { *; }
+
+# ── R8 full mode optimizations ───────────────────────────────────
+-allowaccessmodification
+-repackageclasses

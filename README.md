@@ -1,21 +1,24 @@
 # Insight
 
-**A modern Android personal finance app showcasing Metro DI, Circuit MVI, and dual AI backends (cloud + on-device).**
+**A personal finance Android app with AI-powered features — smart expense categorization and a financial insights chat powered by both cloud and on-device inference.**
 
 [![Kotlin](https://img.shields.io/badge/Kotlin-2.3.0_K2-7F52FF?logo=kotlin&logoColor=white)](https://kotlinlang.org)
 [![Android](https://img.shields.io/badge/Android-API_33+-3DDC84?logo=android&logoColor=white)](https://developer.android.com)
+[![CI](https://github.com/shaharKeisarApps/Insight/actions/workflows/ci.yml/badge.svg)](https://github.com/shaharKeisarApps/Insight/actions/workflows/ci.yml)
 [![License](https://img.shields.io/badge/License-Apache_2.0-blue.svg)](LICENSE)
 
 ---
 
-## Why This Project?
+## Overview
 
-Most Android samples use Dagger/Hilt and MVVM. Insight takes a different path:
+Insight is a full-featured personal finance tracker that uses AI to make managing money easier. Add an expense and the app suggests the right category. Have a question about your spending? Ask the AI chat — it queries your financial data and provides insights in natural language.
 
-- **Metro DI** — Compile-time dependency injection with zero reflection, zero runtime overhead
-- **Circuit** — Slack's MVI architecture with Compose-native state management
-- **Dual AI engine** — Cloud inference (Koog/OpenAI) and on-device inference (Llamatik/llama.cpp)
-- **NowInAndroid-style modules** — Clean multi-module architecture with convention plugins
+The AI system supports two inference backends that can run independently or together:
+
+- **Cloud AI** (Koog + OpenAI) — High-quality responses using GPT models with tool-calling for querying expenses, income, and reports
+- **On-Device AI** (Llamatik + llama.cpp) — Fully offline inference using local GGUF models, with no API costs or data leaving the device
+
+Users can switch between Local, Cloud, or Auto mode directly from Settings. In Auto mode, the app prefers on-device inference and falls back to cloud when needed.
 
 ---
 
@@ -23,9 +26,7 @@ Most Android samples use Dagger/Hilt and MVVM. Insight takes a different path:
 
 | Expenses | Income | Reports | AI Chat | Settings |
 |----------|--------|---------|---------|----------|
-| ![Expenses](docs/screenshots/light/expenses_main.png) | ![Income](docs/screenshots/light/income_main.png) | ![Reports](docs/screenshots/light/reports_main.png) | ![AI Chat](docs/screenshots/light/ai_chat_main.png) | ![Settings](docs/screenshots/light/settings_main.png) |
-
-See [docs/screenshots/README.md](docs/screenshots/README.md) for the full screenshot capture guide covering light, dark, and accessibility themes.
+| ![Expenses](docs/screenshots/light/expenses.png) | ![Income](docs/screenshots/light/income.png) | ![Reports](docs/screenshots/light/reports.png) | ![AI Chat](docs/screenshots/light/ai_chat.png) | ![Settings](docs/screenshots/light/settings.png) |
 
 ---
 
@@ -87,40 +88,15 @@ See [docs/screenshots/README.md](docs/screenshots/README.md) for the full screen
 
 ---
 
-## Key Architectural Highlights
+## AI Integration
 
-### Metro DI — Zero-Reflection Injection
+### Smart Category Suggestion
 
-```kotlin
-@ContributesBinding(AppScope::class)
-@SingleIn(AppScope::class)
-@Inject
-class ExpenseRepositoryImpl(
-    private val database: InsightDatabase,
-) : ExpenseRepository
-```
+When adding an expense, the AI analyzes the description and suggests the most appropriate category — reducing manual input and improving data consistency.
 
-Metro generates all wiring at compile time. No `kapt`, no reflection, no runtime graph resolution.
+### Financial Insights Chat
 
-### Circuit MVI — Compose-Native State
-
-```kotlin
-@Parcelize
-data object ExpensesScreen : Screen {
-    data class State(
-        val expenses: List<Expense>,
-        val eventSink: (Event) -> Unit,
-    ) : CircuitUiState
-}
-
-@CircuitInject(ExpensesScreen::class, AppScope::class)
-@Composable
-fun ExpensesUi(state: ExpensesScreen.State, modifier: Modifier)
-```
-
-Presenters produce state, UI consumes it. No ViewModel, no LiveData — just Compose.
-
-### Dual AI Engine — Cloud + On-Device
+The AI chat screen lets users ask natural language questions about their finances. The AI has access to tool functions that query the local database:
 
 ```kotlin
 @ContributesBinding(AppScope::class)
@@ -133,7 +109,7 @@ class AiServiceStrategy(
 }
 ```
 
-`AUTO` mode tries on-device first, falls back to cloud. Zero API costs when running locally.
+Example queries: *"How much did I spend on food this month?"*, *"What's my biggest expense category?"*, *"Compare my income vs spending."*
 
 ---
 
@@ -156,7 +132,7 @@ Insight/
     ├── income/              # Income management
     ├── reports/             # Financial reports and analytics
     ├── ai-chat/             # AI chat with financial tools
-    └── settings/            # App settings
+    └── settings/            # App settings and AI mode selection
 ```
 
 ---
