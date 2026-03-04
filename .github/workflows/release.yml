@@ -102,19 +102,19 @@ jobs:
           fetch-depth: 0
 
       - name: Download release APK
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-apk
           path: artifacts/apk
 
       - name: Download release AAB
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: release-aab
           path: artifacts/aab
 
       - name: Download R8 mapping
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           name: r8-mapping
           path: artifacts/mapping
