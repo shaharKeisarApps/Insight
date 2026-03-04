@@ -14,6 +14,7 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
@@ -113,6 +114,8 @@ class ChatRepositoryImpl(
                 _messages.update { it + timeoutMessage }
             }
             timeoutMessage
+        } catch (e: CancellationException) {
+            throw e
         } catch (e: Exception) {
             val errorMessage = ChatMessage(
                 id = generateMessageId("assistant"),

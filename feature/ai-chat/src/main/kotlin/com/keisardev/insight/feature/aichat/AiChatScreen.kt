@@ -59,7 +59,6 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -89,6 +88,12 @@ import com.slack.circuit.runtime.screen.Screen
 import dev.zacsweers.metro.Assisted
 import dev.zacsweers.metro.AssistedFactory
 import dev.zacsweers.metro.AssistedInject
+import java.io.Closeable
+import kotlin.coroutines.CoroutineContext
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.cancel
 import kotlinx.coroutines.launch
 import kotlinx.datetime.Clock
 import kotlinx.datetime.TimeZone
@@ -155,7 +160,7 @@ class AiChatPresenter(
         var dismissedSetup by rememberRetained { mutableStateOf(false) }
         var showModelSelection by rememberRetained { mutableStateOf(false) }
         var searchQuery by rememberRetained { mutableStateOf("") }
-        val scope = rememberCoroutineScope()
+        val scope = rememberRetained { RetainedCoroutineScope() }
 
         LaunchedEffect(Unit) {
             if (messages.isEmpty() && chatRepository.isEnabled) {
@@ -236,6 +241,20 @@ class AiChatPresenter(
     @AssistedFactory
     fun interface Factory {
         fun create(navigator: Navigator): AiChatPresenter
+    }
+}
+
+/**
+ * A [CoroutineScope] that survives Circuit's composition lifecycle via [rememberRetained].
+ * Unlike [rememberCoroutineScope], this scope is NOT cancelled when the composition is
+ * temporarily disposed (e.g., during configuration changes or Circuit's internal recomposition),
+ * making it safe for long-running operations like on-device AI inference.
+ */
+private class RetainedCoroutineScope(
+    override val coroutineContext: CoroutineContext = SupervisorJob() + Dispatchers.Main.immediate,
+) : CoroutineScope, Closeable {
+    override fun close() {
+        coroutineContext.cancel()
     }
 }
 
