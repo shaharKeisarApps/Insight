@@ -24,6 +24,9 @@ dependencies {
     // Ktor HTTP client (required by Koog)
     implementation(libs.ktor.client.okhttp)
 
+    // Okio (filesystem abstraction)
+    implementation(libs.okio)
+
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
 

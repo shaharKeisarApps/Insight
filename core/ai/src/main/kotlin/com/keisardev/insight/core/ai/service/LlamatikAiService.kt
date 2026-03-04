@@ -1,7 +1,7 @@
 package com.keisardev.insight.core.ai.service
 
-import android.app.Application
 import com.keisardev.insight.core.common.di.AppScope
+import com.keisardev.insight.core.ai.di.ModelsDir
 import com.keisardev.insight.core.data.datastore.UserSettingsRepository
 import com.keisardev.insight.core.data.repository.CategoryRepository
 import com.keisardev.insight.core.data.repository.ExpenseRepository
@@ -32,7 +32,8 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
-import java.io.File
+import okio.FileSystem
+import okio.Path
 
 /**
  * Implementation of [AiService] using Llamatik for on-device LLM inference.
@@ -48,7 +49,8 @@ import java.io.File
 @SingleIn(AppScope::class)
 @Inject
 class LlamatikAiService(
-    application: Application,
+    @ModelsDir private val modelsDir: Path,
+    private val fileSystem: FileSystem,
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
     private val categoryRepository: CategoryRepository,
@@ -56,21 +58,21 @@ class LlamatikAiService(
     private val userSettingsRepository: UserSettingsRepository,
 ) : AiService {
 
-    private val modelsDir = File(application.filesDir, "models")
     @Volatile private var _activeModelFileName: String = ""
 
-    private val modelPath: String?
+    private val modelPath: Path?
         get() {
             if (_activeModelFileName.isNotEmpty()) {
-                val activeFile = File(modelsDir, _activeModelFileName)
-                if (activeFile.exists()) return activeFile.absolutePath
+                val activePath = modelsDir / _activeModelFileName
+                if (fileSystem.exists(activePath)) return activePath
             }
-            return modelsDir.listFiles()?.firstOrNull { it.extension == "gguf" }?.absolutePath
+            return fileSystem.listOrNull(modelsDir)
+                ?.firstOrNull { it.name.substringAfterLast('.') == "gguf" }
         }
 
     private val mutex = Mutex()
     @Volatile private var isModelLoaded = false
-    @Volatile private var loadedModelPath: String? = null
+    @Volatile private var loadedModelPath: Path? = null
 
     override val isEnabled: Boolean
         get() = modelPath != null
@@ -93,7 +95,7 @@ class LlamatikAiService(
         }
         if (isModelLoaded) return
         withContext(Dispatchers.IO) {
-            LlamaBridge.initGenerateModel(path)
+            LlamaBridge.initGenerateModel(path.toString())
         }
         isModelLoaded = true
         loadedModelPath = path
