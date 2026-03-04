@@ -133,19 +133,6 @@ jobs:
           name: release-apk
           path: artifacts/apk
 
-      - name: Download release AAB
-        uses: actions/download-artifact@v8
-        with:
-          name: release-aab
-          path: artifacts/aab
-
-      - name: Download R8 mapping
-        uses: actions/download-artifact@v8
-        with:
-          name: r8-mapping
-          path: artifacts/mapping
-        continue-on-error: true
-
       - name: Extract version from tag
         id: version
         run: echo "VERSION=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
@@ -166,7 +153,4 @@ jobs:
         with:
           name: Insight v${{ steps.version.outputs.VERSION }}
           body: ${{ steps.changelog.outputs.BODY }}
-          files: |
-            artifacts/apk/*.apk
-            artifacts/aab/*.aab
-            artifacts/mapping/mapping.txt
+          files: artifacts/apk/*.apk
