@@ -192,7 +192,7 @@ class AiChatPresenter(
                         val messageToSend = inputText.trim()
                         inputText = ""
                         scope.launch {
-                            chatRepository.sendMessage(messageToSend)
+                            chatRepository.sendMessageStream(messageToSend).collect {}
                         }
                     }
                 }
@@ -373,7 +373,8 @@ private fun ChatMessagesList(
 ) {
     val listState = rememberLazyListState()
 
-    LaunchedEffect(messages.size) {
+    // Scroll when new messages arrive or when streaming content grows
+    LaunchedEffect(messages.size, messages.lastOrNull()?.content?.length) {
         if (messages.isNotEmpty()) {
             listState.animateScrollToItem(messages.size - 1)
         }
@@ -385,7 +386,9 @@ private fun ChatMessagesList(
         contentPadding = PaddingValues(horizontal = 12.dp, vertical = 16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
-        items(messages, key = { it.id }) { message ->
+        items(messages.size, key = { messages[it].id }) { index ->
+            val message = messages[index]
+            val isStreaming = isLoading && index == messages.lastIndex && !message.isUser
             AnimatedVisibility(
                 visible = true,
                 enter = if (message.isUser) {
@@ -416,11 +419,14 @@ private fun ChatMessagesList(
                 },
                 exit = fadeOut(animationSpec = tween(150)) + shrinkVertically()
             ) {
-                ChatMessageItem(message = message)
+                ChatMessageItem(message = message, isStreaming = isStreaming)
             }
         }
 
-        if (isLoading) {
+        // Show typing indicator only when loading and no streaming placeholder exists yet
+        val hasStreamingPlaceholder = isLoading &&
+            messages.lastOrNull()?.role == ChatRole.ASSISTANT
+        if (isLoading && !hasStreamingPlaceholder) {
             item {
                 TypingIndicator()
             }
@@ -432,6 +438,7 @@ private fun ChatMessagesList(
 private fun ChatMessageItem(
     message: ChatMessage,
     modifier: Modifier = Modifier,
+    isStreaming: Boolean = false,
 ) {
     Column(
         modifier = modifier.fillMaxWidth(),
@@ -475,7 +482,7 @@ private fun ChatMessageItem(
                 modifier = Modifier.widthIn(max = 280.dp),
             ) {
                 Text(
-                    text = message.content,
+                    text = if (isStreaming) "${message.content}▌" else message.content,
                     modifier = Modifier.padding(
                         horizontal = 16.dp,
                         vertical = 12.dp

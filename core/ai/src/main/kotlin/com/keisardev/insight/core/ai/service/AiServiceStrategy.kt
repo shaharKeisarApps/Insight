@@ -12,6 +12,7 @@ import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.flow.flow
 import kotlinx.coroutines.flow.map
 
 /**
@@ -105,6 +106,14 @@ class AiServiceStrategy(
     ): String {
         syncModeIfNeeded()
         return activeService.chat(message, history)
+    }
+
+    override fun chatStream(
+        message: String,
+        history: List<ChatMessage>,
+    ): Flow<String> = flow {
+        syncModeIfNeeded()
+        activeService.chatStream(message, history).collect { emit(it) }
     }
 }
 

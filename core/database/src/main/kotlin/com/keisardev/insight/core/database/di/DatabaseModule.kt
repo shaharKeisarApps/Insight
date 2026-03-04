@@ -18,6 +18,7 @@ interface DatabaseModule {
                 schema = ExpenseDatabase.Schema,
                 context = application,
                 name = "expense_tracker.db",
+                callback = AndroidSqliteDriver.Callback(ExpenseDatabase.Schema),
             )
             return ExpenseDatabase(driver)
         }

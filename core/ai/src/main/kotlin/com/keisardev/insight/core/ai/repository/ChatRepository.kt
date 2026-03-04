@@ -70,6 +70,17 @@ interface ChatRepository {
     suspend fun sendMessage(content: String): ChatMessage
 
     /**
+     * Sends a user message and streams the AI response token-by-token.
+     *
+     * Emits [ChatMessage] instances with progressively longer content as tokens arrive.
+     * The UI can observe this flow to display streaming text in real time.
+     *
+     * @param content The user's message content
+     * @return Flow of ChatMessage with progressively updated assistant content
+     */
+    fun sendMessageStream(content: String): Flow<ChatMessage>
+
+    /**
      * Clears all messages from the current chat session.
      * Optionally adds a welcome message after clearing.
      *
