@@ -1,6 +1,8 @@
 package com.keisardev.insight.core.ai.service
 
 import com.keisardev.insight.core.model.Category
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.flow
 
 /**
  * Represents a message in the chat conversation history.
@@ -51,4 +53,15 @@ interface AiService {
         message: String,
         history: List<ChatMessage> = emptyList(),
     ): String
+
+    /**
+     * Streams a chat response token-by-token.
+     * Each emission contains the accumulated text so far.
+     *
+     * Default implementation wraps [chat] for backends that don't support streaming.
+     */
+    fun chatStream(
+        message: String,
+        history: List<ChatMessage> = emptyList(),
+    ): Flow<String> = flow { emit(chat(message, history)) }
 }

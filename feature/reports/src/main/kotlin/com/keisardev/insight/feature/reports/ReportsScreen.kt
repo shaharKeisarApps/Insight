@@ -8,7 +8,6 @@ import androidx.compose.animation.core.tween
 import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.scaleIn
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.togetherWith
@@ -242,11 +241,13 @@ fun ReportsUi(state: ReportsScreen.State, modifier: Modifier = Modifier) {
                 ReportViewType.SPENDING -> SpendingView(
                     totalSpending = state.totalSpending,
                     categoryBreakdown = state.categoryBreakdown,
+                    monthKey = "${state.selectedMonth}_${state.selectedYear}",
                     currencyCode = state.currencyCode,
                 )
                 ReportViewType.EARNINGS -> EarningsView(
                     totalIncome = state.totalIncome,
                     incomeCategoryBreakdown = state.incomeCategoryBreakdown,
+                    monthKey = "${state.selectedMonth}_${state.selectedYear}",
                     currencyCode = state.currencyCode,
                 )
                 ReportViewType.BALANCE -> BalanceView(
@@ -300,6 +301,7 @@ private fun getViewTypeIcon(viewType: ReportViewType): ImageVector {
 private fun SpendingView(
     totalSpending: Double,
     categoryBreakdown: List<CategorySpending>,
+    monthKey: String,
     currencyCode: String,
     modifier: Modifier = Modifier,
 ) {
@@ -314,48 +316,50 @@ private fun SpendingView(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        if (categoryBreakdown.isEmpty()) {
-            AnimatedVisibility(
-                visible = true,
-                enter = fadeIn(animationSpec = tween(400)) + scaleIn(
-                    initialScale = 0.9f,
-                    animationSpec = tween(400)
-                ),
-            ) {
+        AnimatedContent(
+            targetState = monthKey,
+            transitionSpec = {
+                fadeIn(tween(300)) togetherWith fadeOut(tween(200))
+            },
+            label = "spending_category_transition"
+        ) { _ ->
+            if (categoryBreakdown.isEmpty()) {
                 EmptyState(
                     icon = Icons.Outlined.BarChart,
                     title = "No expenses this month",
                 )
-            }
-        } else {
-            Text(
-                text = "By Category",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(
-                    count = categoryBreakdown.size,
-                    key = { index -> categoryBreakdown[index].category.id }
-                ) { index ->
-                    val spending = categoryBreakdown[index]
-                    AnimatedVisibility(
-                        visible = true,
-                        enter = fadeIn(
-                            animationSpec = tween(
-                                durationMillis = 300,
-                                delayMillis = index * 50
-                            )
-                        ) + expandVertically(),
-                        label = "category_item_$index"
+            } else {
+                Column {
+                    Text(
+                        text = "By Category",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        CategoryBreakdownItem(
-                            spending = spending,
-                            currencyCode = currencyCode,
-                        )
+                        items(
+                            count = categoryBreakdown.size,
+                            key = { index -> categoryBreakdown[index].category.id }
+                        ) { index ->
+                            val spending = categoryBreakdown[index]
+                            AnimatedVisibility(
+                                visible = true,
+                                enter = fadeIn(
+                                    animationSpec = tween(
+                                        durationMillis = 300,
+                                        delayMillis = index * 50
+                                    )
+                                ) + expandVertically(),
+                                label = "category_item_$index"
+                            ) {
+                                CategoryBreakdownItem(
+                                    spending = spending,
+                                    currencyCode = currencyCode,
+                                )
+                            }
+                        }
                     }
                 }
             }
@@ -367,6 +371,7 @@ private fun SpendingView(
 private fun EarningsView(
     totalIncome: Double,
     incomeCategoryBreakdown: List<IncomeCategorySpending>,
+    monthKey: String,
     currencyCode: String,
     modifier: Modifier = Modifier,
 ) {
@@ -381,48 +386,50 @@ private fun EarningsView(
 
         Spacer(modifier = Modifier.height(24.dp))
 
-        if (incomeCategoryBreakdown.isEmpty()) {
-            AnimatedVisibility(
-                visible = true,
-                enter = fadeIn(animationSpec = tween(400)) + scaleIn(
-                    initialScale = 0.9f,
-                    animationSpec = tween(400)
-                ),
-            ) {
+        AnimatedContent(
+            targetState = monthKey,
+            transitionSpec = {
+                fadeIn(tween(300)) togetherWith fadeOut(tween(200))
+            },
+            label = "earnings_category_transition"
+        ) { _ ->
+            if (incomeCategoryBreakdown.isEmpty()) {
                 EmptyState(
                     icon = Icons.Outlined.BarChart,
                     title = "No earnings this month",
                 )
-            }
-        } else {
-            Text(
-                text = "By Category",
-                style = MaterialTheme.typography.titleMedium,
-                fontWeight = FontWeight.Bold,
-            )
-            Spacer(modifier = Modifier.height(12.dp))
-            LazyColumn(
-                verticalArrangement = Arrangement.spacedBy(12.dp),
-            ) {
-                items(
-                    count = incomeCategoryBreakdown.size,
-                    key = { index -> incomeCategoryBreakdown[index].category.id }
-                ) { index ->
-                    val spending = incomeCategoryBreakdown[index]
-                    AnimatedVisibility(
-                        visible = true,
-                        enter = fadeIn(
-                            animationSpec = tween(
-                                durationMillis = 300,
-                                delayMillis = index * 50
-                            )
-                        ) + expandVertically(),
-                        label = "income_category_item_$index"
+            } else {
+                Column {
+                    Text(
+                        text = "By Category",
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    Spacer(modifier = Modifier.height(12.dp))
+                    LazyColumn(
+                        verticalArrangement = Arrangement.spacedBy(12.dp),
                     ) {
-                        IncomeCategoryBreakdownItem(
-                            spending = spending,
-                            currencyCode = currencyCode,
-                        )
+                        items(
+                            count = incomeCategoryBreakdown.size,
+                            key = { index -> incomeCategoryBreakdown[index].category.id }
+                        ) { index ->
+                            val spending = incomeCategoryBreakdown[index]
+                            AnimatedVisibility(
+                                visible = true,
+                                enter = fadeIn(
+                                    animationSpec = tween(
+                                        durationMillis = 300,
+                                        delayMillis = index * 50
+                                    )
+                                ) + expandVertically(),
+                                label = "income_category_item_$index"
+                            ) {
+                                IncomeCategoryBreakdownItem(
+                                    spending = spending,
+                                    currencyCode = currencyCode,
+                                )
+                            }
+                        }
                     }
                 }
             }

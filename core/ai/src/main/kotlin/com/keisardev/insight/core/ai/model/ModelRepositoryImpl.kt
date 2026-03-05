@@ -1,7 +1,7 @@
 package com.keisardev.insight.core.ai.model
 
-import android.app.Application
 import com.keisardev.insight.core.common.di.AppScope
+import com.keisardev.insight.core.ai.di.ModelsDir
 import com.keisardev.insight.core.data.datastore.UserSettingsRepository
 import com.keisardev.insight.core.model.InstalledModel
 import com.keisardev.insight.core.model.ModelInfo
@@ -23,20 +23,22 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import okio.FileSystem
+import okio.IOException
+import okio.Path
+import okio.buffer
 import org.json.JSONArray
-import java.io.File
-import java.io.IOException
 
 @ContributesBinding(AppScope::class)
 @SingleIn(AppScope::class)
 @Inject
 class ModelRepositoryImpl(
-    private val application: Application,
+    @ModelsDir private val modelsDir: Path,
+    private val fileSystem: FileSystem,
     private val httpClient: HttpClient,
     private val userSettingsRepository: UserSettingsRepository,
 ) : ModelRepository {
 
-    private val modelsDir = File(application.filesDir, "models")
     private val _modelState = MutableStateFlow<ModelState>(ModelState.NotInstalled)
     private val _searchResults = MutableStateFlow<List<ModelInfo>>(emptyList())
     private val _isSearching = MutableStateFlow(false)
@@ -120,8 +122,10 @@ class ModelRepositoryImpl(
      * state that could cause the foreground service to stopSelf() prematurely.
      */
     private fun doRefreshModelStatus() {
-        modelsDir.mkdirs()
-        val modelFiles = modelsDir.listFiles()?.filter { it.extension == "gguf" } ?: emptyList()
+        fileSystem.createDirectories(modelsDir)
+        val modelFiles = fileSystem.listOrNull(modelsDir)
+            ?.filter { it.name.substringAfterLast('.') == "gguf" }
+            ?: emptyList()
 
         if (modelFiles.isEmpty()) {
             _modelState.value = ModelState.NotInstalled
@@ -130,13 +134,13 @@ class ModelRepositoryImpl(
 
         val activeFileName = _activeModelFileName
 
-        val installedModels = modelFiles.map { file ->
+        val installedModels = modelFiles.map { path ->
             InstalledModel(
-                fileName = file.name,
-                displayName = file.nameWithoutExtension,
-                filePath = file.absolutePath,
-                sizeBytes = file.length(),
-                isActive = file.name == activeFileName,
+                fileName = path.name,
+                displayName = path.name.substringBeforeLast('.'),
+                filePath = path.toString(),
+                sizeBytes = fileSystem.metadata(path).size ?: 0L,
+                isActive = path.name == activeFileName,
             )
         }
 
@@ -172,16 +176,16 @@ class ModelRepositoryImpl(
             val job = coroutineContext[Job]
             downloadJob = job
 
-            modelsDir.mkdirs()
-            val tempFile = File(modelsDir, "${model.fileName}.tmp")
-            val targetFile = File(modelsDir, model.fileName)
+            fileSystem.createDirectories(modelsDir)
+            val tempPath = modelsDir / "${model.fileName}.tmp"
+            val targetPath = modelsDir / model.fileName
 
             try {
                 httpClient.prepareGet(model.downloadUrl).execute { response ->
                     val totalBytes = response.contentLength() ?: model.sizeBytes
                     val channel = response.bodyAsChannel()
 
-                    tempFile.outputStream().use { output ->
+                    fileSystem.sink(tempPath).buffer().use { sink ->
                         var downloadedBytes = 0L
                         val buffer = ByteArray(8192)
 
@@ -189,7 +193,7 @@ class ModelRepositoryImpl(
                             val bytesRead = channel.readAvailable(buffer)
                             if (bytesRead <= 0) break
 
-                            output.write(buffer, 0, bytesRead)
+                            sink.write(buffer, 0, bytesRead)
                             downloadedBytes += bytesRead
 
                             val progress = (downloadedBytes.toFloat() / totalBytes).coerceIn(0f, 1f)
@@ -201,18 +205,16 @@ class ModelRepositoryImpl(
                         }
                     }
 
-                    // Delete existing target to ensure renameTo succeeds (re-downloads)
-                    if (targetFile.exists()) targetFile.delete()
-                    if (!tempFile.renameTo(targetFile)) {
-                        throw IOException("Failed to move downloaded model to final location")
-                    }
+                    // Delete existing target to ensure atomicMove succeeds (re-downloads)
+                    if (fileSystem.exists(targetPath)) fileSystem.delete(targetPath)
+                    fileSystem.atomicMove(tempPath, targetPath)
                     _activeModelFileName = model.fileName
                     try { userSettingsRepository.updateActiveModel(model.fileName) } catch (_: Exception) {}
                     // Directly refresh, bypassing the Downloading guard — no transient state
                     doRefreshModelStatus()
                 }
             } catch (e: Exception) {
-                tempFile.delete()
+                if (fileSystem.exists(tempPath)) fileSystem.delete(tempPath)
                 if (e is kotlinx.coroutines.CancellationException) {
                     doRefreshModelStatus()
                 } else {
@@ -227,7 +229,9 @@ class ModelRepositoryImpl(
         downloadJob = null
 
         // Clean up partial file
-        modelsDir.listFiles()?.filter { it.extension == "tmp" }?.forEach { it.delete() }
+        fileSystem.listOrNull(modelsDir)
+            ?.filter { it.name.substringAfterLast('.') == "tmp" }
+            ?.forEach { fileSystem.delete(it) }
         refreshModelStatus()
     }
 
@@ -253,8 +257,8 @@ class ModelRepositoryImpl(
 
     override suspend fun deleteModel(fileName: String) {
         withContext(Dispatchers.IO) {
-            val file = File(modelsDir, fileName)
-            if (file.exists()) file.delete()
+            val path = modelsDir / fileName
+            if (fileSystem.exists(path)) fileSystem.delete(path)
         }
         // If we deleted the active model, clear the preference
         if (_activeModelFileName == fileName) {

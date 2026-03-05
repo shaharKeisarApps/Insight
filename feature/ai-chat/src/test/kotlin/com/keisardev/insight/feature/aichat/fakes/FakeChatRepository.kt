@@ -6,6 +6,7 @@ import com.keisardev.insight.core.model.ChatRole
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.flow
 
 class FakeChatRepository(
     override val isEnabled: Boolean = true,
@@ -47,6 +48,10 @@ class FakeChatRepository(
         )
         _messages.value = _messages.value + userMessage + assistantMessage
         return assistantMessage
+    }
+
+    override fun sendMessageStream(content: String): Flow<ChatMessage> = flow {
+        emit(sendMessage(content))
     }
 
     override suspend fun clearHistory(addWelcomeMessage: Boolean) {

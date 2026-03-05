@@ -1,7 +1,7 @@
 package com.keisardev.insight.core.ai.service
 
-import android.app.Application
 import com.keisardev.insight.core.common.di.AppScope
+import com.keisardev.insight.core.ai.di.ModelsDir
 import com.keisardev.insight.core.data.datastore.UserSettingsRepository
 import com.keisardev.insight.core.data.repository.CategoryRepository
 import com.keisardev.insight.core.data.repository.ExpenseRepository
@@ -11,12 +11,17 @@ import com.keisardev.insight.core.model.Category
 import com.keisardev.insight.core.model.Expense
 import com.keisardev.insight.core.model.Income
 import com.keisardev.insight.core.model.IncomeType
+import com.llamatik.library.platform.GenStream
 import com.llamatik.library.platform.LlamaBridge
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.TimeoutCancellationException
+import kotlinx.coroutines.channels.awaitClose
+import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.callbackFlow
 import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
@@ -27,7 +32,8 @@ import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.minus
 import kotlinx.datetime.toLocalDateTime
-import java.io.File
+import okio.FileSystem
+import okio.Path
 
 /**
  * Implementation of [AiService] using Llamatik for on-device LLM inference.
@@ -43,7 +49,8 @@ import java.io.File
 @SingleIn(AppScope::class)
 @Inject
 class LlamatikAiService(
-    application: Application,
+    @ModelsDir private val modelsDir: Path,
+    private val fileSystem: FileSystem,
     private val expenseRepository: ExpenseRepository,
     private val incomeRepository: IncomeRepository,
     private val categoryRepository: CategoryRepository,
@@ -51,21 +58,21 @@ class LlamatikAiService(
     private val userSettingsRepository: UserSettingsRepository,
 ) : AiService {
 
-    private val modelsDir = File(application.filesDir, "models")
     @Volatile private var _activeModelFileName: String = ""
 
-    private val modelPath: String?
+    private val modelPath: Path?
         get() {
             if (_activeModelFileName.isNotEmpty()) {
-                val activeFile = File(modelsDir, _activeModelFileName)
-                if (activeFile.exists()) return activeFile.absolutePath
+                val activePath = modelsDir / _activeModelFileName
+                if (fileSystem.exists(activePath)) return activePath
             }
-            return modelsDir.listFiles()?.firstOrNull { it.extension == "gguf" }?.absolutePath
+            return fileSystem.listOrNull(modelsDir)
+                ?.firstOrNull { it.name.substringAfterLast('.') == "gguf" }
         }
 
     private val mutex = Mutex()
     @Volatile private var isModelLoaded = false
-    @Volatile private var loadedModelPath: String? = null
+    @Volatile private var loadedModelPath: Path? = null
 
     override val isEnabled: Boolean
         get() = modelPath != null
@@ -88,7 +95,7 @@ class LlamatikAiService(
         }
         if (isModelLoaded) return
         withContext(Dispatchers.IO) {
-            LlamaBridge.initGenerateModel(path)
+            LlamaBridge.initGenerateModel(path.toString())
         }
         isModelLoaded = true
         loadedModelPath = path
@@ -144,84 +151,159 @@ class LlamatikAiService(
         }
     }
 
+    // --- Phase 4: Question type classification for smart context injection ---
+
+    private enum class QuestionType {
+        EXPENSE_QUERY, INCOME_QUERY, CATEGORY_BREAKDOWN, RECENT_ITEMS, COMPARISON, GENERAL
+    }
+
+    private fun classifyQuestionType(message: String): QuestionType {
+        val lower = message.lowercase()
+        return when {
+            COMPARISON_KEYWORDS.any { lower.contains(it) } -> QuestionType.COMPARISON
+            CATEGORY_KEYWORDS.any { lower.contains(it) } -> QuestionType.CATEGORY_BREAKDOWN
+            RECENT_KEYWORDS.any { lower.contains(it) } -> QuestionType.RECENT_ITEMS
+            INCOME_QUERY_KEYWORDS.any { lower.contains(it) } -> QuestionType.INCOME_QUERY
+            EXPENSE_QUERY_KEYWORDS.any { lower.contains(it) } -> QuestionType.EXPENSE_QUERY
+            else -> QuestionType.GENERAL
+        }
+    }
+
     private suspend fun buildFinancialSummary(today: LocalDate, currencySymbol: String): String {
+        return buildFinancialSummaryForType(today, currencySymbol, QuestionType.GENERAL)
+    }
+
+    private suspend fun buildFinancialSummaryForType(
+        today: LocalDate,
+        currencySymbol: String,
+        questionType: QuestionType,
+    ): String {
         return try {
             val monthStart = LocalDate(today.year, today.month, 1)
             val monthEnd = today
-
-            // Previous month
             val prevMonthEnd = monthStart.minus(DatePeriod(days = 1))
             val prevMonthStart = LocalDate(prevMonthEnd.year, prevMonthEnd.month, 1)
 
-            val monthlyExpenseTotal = expenseRepository.observeMonthlyTotal(monthStart, monthEnd).first()
-            val monthlyIncomeTotal = incomeRepository.observeMonthlyTotal(monthStart, monthEnd).first()
-            val categoryBreakdown = expenseRepository.observeTotalByCategory(monthStart, monthEnd).first()
-            val recentExpenses = expenseRepository.observeAllExpenses().first().take(10)
-            val recentIncomes = incomeRepository.observeAllIncome().first().take(5)
-
-            // Previous month totals for comparison
-            val prevExpenseTotal = expenseRepository.observeMonthlyTotal(prevMonthStart, prevMonthEnd).first()
-            val prevIncomeTotal = incomeRepository.observeMonthlyTotal(prevMonthStart, prevMonthEnd).first()
-
-            // Income category breakdown
-            val incomeCategoryBreakdown = incomeRepository.observeTotalByCategory(monthStart, monthEnd).first()
-
             buildString {
-                appendLine("Here is your financial data:")
-                appendLine("Currency: $currencySymbol")
-                appendLine()
-                appendLine("This month (${today.month} ${today.year}):")
-                appendLine("- Total spent: $currencySymbol${String.format("%.2f", monthlyExpenseTotal)}")
-                appendLine("- Total earned: $currencySymbol${String.format("%.2f", monthlyIncomeTotal)}")
-                val net = monthlyIncomeTotal - monthlyExpenseTotal
-                if (net >= 0) {
-                    appendLine("- Saved: $currencySymbol${String.format("%.2f", net)}")
-                } else {
-                    appendLine("- Overspent by: $currencySymbol${String.format("%.2f", -net)}")
-                }
+                appendLine("Financial data (${today.month} ${today.year}):")
 
-                if (prevExpenseTotal > 0 || prevIncomeTotal > 0) {
-                    appendLine()
-                    appendLine("Previous month (${prevMonthEnd.month} ${prevMonthEnd.year}):")
-                    appendLine("- Total spent: $currencySymbol${String.format("%.2f", prevExpenseTotal)}")
-                    appendLine("- Total earned: $currencySymbol${String.format("%.2f", prevIncomeTotal)}")
-                }
-
-                if (categoryBreakdown.isNotEmpty()) {
-                    appendLine()
-                    appendLine("Expense categories this month:")
-                    categoryBreakdown.entries
-                        .sortedByDescending { it.value }
-                        .forEach { (category, amount) ->
-                            appendLine("- ${category.name}: $currencySymbol${String.format("%.2f", amount)}")
+                when (questionType) {
+                    QuestionType.EXPENSE_QUERY -> {
+                        val total = expenseRepository.observeMonthlyTotal(monthStart, monthEnd).first()
+                        val breakdown = expenseRepository.observeTotalByCategory(monthStart, monthEnd).first()
+                        appendLine("Total spent: $currencySymbol${String.format("%.2f", total)}")
+                        if (breakdown.isNotEmpty()) {
+                            breakdown.entries.sortedByDescending { it.value }.forEach { (cat, amt) ->
+                                appendLine("- ${cat.name}: $currencySymbol${String.format("%.2f", amt)}")
+                            }
                         }
-                }
-
-                if (incomeCategoryBreakdown.isNotEmpty()) {
-                    appendLine()
-                    appendLine("Income categories this month:")
-                    incomeCategoryBreakdown.entries
-                        .sortedByDescending { it.value }
-                        .forEach { (category, amount) ->
-                            appendLine("- ${category.name}: $currencySymbol${String.format("%.2f", amount)}")
-                        }
-                }
-
-                if (recentExpenses.isNotEmpty()) {
-                    appendLine()
-                    appendLine("Recent expenses:")
-                    recentExpenses.forEach { expense ->
-                        val desc = if (expense.description.isNotBlank()) " - ${expense.description}" else ""
-                        appendLine("- ${expense.date}: ${expense.category.name}, $currencySymbol${String.format("%.2f", expense.amount)}$desc")
                     }
-                }
+                    QuestionType.INCOME_QUERY -> {
+                        val total = incomeRepository.observeMonthlyTotal(monthStart, monthEnd).first()
+                        val breakdown = incomeRepository.observeTotalByCategory(monthStart, monthEnd).first()
+                        val recent = incomeRepository.observeAllIncome().first().take(5)
+                        appendLine("Total earned: $currencySymbol${String.format("%.2f", total)}")
+                        if (breakdown.isNotEmpty()) {
+                            breakdown.entries.sortedByDescending { it.value }.forEach { (cat, amt) ->
+                                appendLine("- ${cat.name}: $currencySymbol${String.format("%.2f", amt)}")
+                            }
+                        }
+                        if (recent.isNotEmpty()) {
+                            appendLine("Recent income:")
+                            recent.forEach { income ->
+                                val desc = if (income.description.isNotBlank()) " - ${income.description}" else ""
+                                appendLine("- ${income.date}: ${income.category.name}, $currencySymbol${String.format("%.2f", income.amount)}$desc")
+                            }
+                        }
+                    }
+                    QuestionType.CATEGORY_BREAKDOWN -> {
+                        val breakdown = expenseRepository.observeTotalByCategory(monthStart, monthEnd).first()
+                        if (breakdown.isNotEmpty()) {
+                            appendLine("Expense categories:")
+                            breakdown.entries.sortedByDescending { it.value }.forEach { (cat, amt) ->
+                                appendLine("- ${cat.name}: $currencySymbol${String.format("%.2f", amt)}")
+                            }
+                        }
+                        val incomeBreakdown = incomeRepository.observeTotalByCategory(monthStart, monthEnd).first()
+                        if (incomeBreakdown.isNotEmpty()) {
+                            appendLine("Income categories:")
+                            incomeBreakdown.entries.sortedByDescending { it.value }.forEach { (cat, amt) ->
+                                appendLine("- ${cat.name}: $currencySymbol${String.format("%.2f", amt)}")
+                            }
+                        }
+                    }
+                    QuestionType.RECENT_ITEMS -> {
+                        val recentExpenses = expenseRepository.observeAllExpenses().first().take(10)
+                        val recentIncomes = incomeRepository.observeAllIncome().first().take(5)
+                        if (recentExpenses.isNotEmpty()) {
+                            appendLine("Recent expenses:")
+                            recentExpenses.forEach { expense ->
+                                val desc = if (expense.description.isNotBlank()) " - ${expense.description}" else ""
+                                appendLine("- ${expense.date}: ${expense.category.name}, $currencySymbol${String.format("%.2f", expense.amount)}$desc")
+                            }
+                        }
+                        if (recentIncomes.isNotEmpty()) {
+                            appendLine("Recent income:")
+                            recentIncomes.forEach { income ->
+                                val desc = if (income.description.isNotBlank()) " - ${income.description}" else ""
+                                appendLine("- ${income.date}: ${income.category.name}, $currencySymbol${String.format("%.2f", income.amount)}$desc")
+                            }
+                        }
+                    }
+                    QuestionType.COMPARISON -> {
+                        val expTotal = expenseRepository.observeMonthlyTotal(monthStart, monthEnd).first()
+                        val incTotal = incomeRepository.observeMonthlyTotal(monthStart, monthEnd).first()
+                        val prevExpTotal = expenseRepository.observeMonthlyTotal(prevMonthStart, prevMonthEnd).first()
+                        val prevIncTotal = incomeRepository.observeMonthlyTotal(prevMonthStart, prevMonthEnd).first()
+                        appendLine("This month: spent $currencySymbol${String.format("%.2f", expTotal)}, earned $currencySymbol${String.format("%.2f", incTotal)}")
+                        appendLine("Last month (${prevMonthEnd.month}): spent $currencySymbol${String.format("%.2f", prevExpTotal)}, earned $currencySymbol${String.format("%.2f", prevIncTotal)}")
+                    }
+                    QuestionType.GENERAL -> {
+                        // Full data fetch (fallback)
+                        val expTotal = expenseRepository.observeMonthlyTotal(monthStart, monthEnd).first()
+                        val incTotal = incomeRepository.observeMonthlyTotal(monthStart, monthEnd).first()
+                        val catBreakdown = expenseRepository.observeTotalByCategory(monthStart, monthEnd).first()
+                        val recentExpenses = expenseRepository.observeAllExpenses().first().take(10)
+                        val recentIncomes = incomeRepository.observeAllIncome().first().take(5)
+                        val prevExpTotal = expenseRepository.observeMonthlyTotal(prevMonthStart, prevMonthEnd).first()
+                        val prevIncTotal = incomeRepository.observeMonthlyTotal(prevMonthStart, prevMonthEnd).first()
+                        val incCatBreakdown = incomeRepository.observeTotalByCategory(monthStart, monthEnd).first()
 
-                if (recentIncomes.isNotEmpty()) {
-                    appendLine()
-                    appendLine("Recent income:")
-                    recentIncomes.forEach { income ->
-                        val desc = if (income.description.isNotBlank()) " - ${income.description}" else ""
-                        appendLine("- ${income.date}: ${income.category.name}, $currencySymbol${String.format("%.2f", income.amount)}$desc")
+                        appendLine("Total spent: $currencySymbol${String.format("%.2f", expTotal)}")
+                        appendLine("Total earned: $currencySymbol${String.format("%.2f", incTotal)}")
+                        val net = incTotal - expTotal
+                        if (net >= 0) appendLine("Saved: $currencySymbol${String.format("%.2f", net)}")
+                        else appendLine("Overspent: $currencySymbol${String.format("%.2f", -net)}")
+
+                        if (prevExpTotal > 0 || prevIncTotal > 0) {
+                            appendLine("Last month (${prevMonthEnd.month}): spent $currencySymbol${String.format("%.2f", prevExpTotal)}, earned $currencySymbol${String.format("%.2f", prevIncTotal)}")
+                        }
+                        if (catBreakdown.isNotEmpty()) {
+                            appendLine("Expense categories:")
+                            catBreakdown.entries.sortedByDescending { it.value }.forEach { (cat, amt) ->
+                                appendLine("- ${cat.name}: $currencySymbol${String.format("%.2f", amt)}")
+                            }
+                        }
+                        if (incCatBreakdown.isNotEmpty()) {
+                            appendLine("Income categories:")
+                            incCatBreakdown.entries.sortedByDescending { it.value }.forEach { (cat, amt) ->
+                                appendLine("- ${cat.name}: $currencySymbol${String.format("%.2f", amt)}")
+                            }
+                        }
+                        if (recentExpenses.isNotEmpty()) {
+                            appendLine("Recent expenses:")
+                            recentExpenses.forEach { expense ->
+                                val desc = if (expense.description.isNotBlank()) " - ${expense.description}" else ""
+                                appendLine("- ${expense.date}: ${expense.category.name}, $currencySymbol${String.format("%.2f", expense.amount)}$desc")
+                            }
+                        }
+                        if (recentIncomes.isNotEmpty()) {
+                            appendLine("Recent income:")
+                            recentIncomes.forEach { income ->
+                                val desc = if (income.description.isNotBlank()) " - ${income.description}" else ""
+                                appendLine("- ${income.date}: ${income.category.name}, $currencySymbol${String.format("%.2f", income.amount)}$desc")
+                            }
+                        }
                     }
                 }
             }
@@ -254,6 +336,9 @@ class LlamatikAiService(
     private fun classifyIntent(message: String): UserIntent? {
         val lower = message.lowercase()
 
+        // Phase 3: Query override patterns — these indicate data QUERY, not an ADD action
+        if (QUERY_OVERRIDES.any { lower.contains(it) }) return null
+
         // Explicit action triggers — words that explicitly indicate intent to create a record
         val hasActionTrigger = ACTION_TRIGGERS.any { "\\b$it\\b".toRegex().containsMatchIn(lower) }
 
@@ -285,8 +370,9 @@ class LlamatikAiService(
             else -> IntentAction.ADD_EXPENSE
         }
 
-        // Extract amount via regex
-        val amount = AMOUNT_REGEX.find(lower)?.let { match ->
+        // Phase 3B: Use strict regex always; bare regex only when explicit action trigger present
+        val amountRegex = if (hasActionTrigger) AMOUNT_REGEX_BARE else AMOUNT_REGEX_STRICT
+        val amount = amountRegex.find(lower)?.let { match ->
             (match.groupValues[1].takeIf { it.isNotEmpty() }
                 ?: match.groupValues[2].takeIf { it.isNotEmpty() })
                 ?.toDoubleOrNull()
@@ -296,7 +382,7 @@ class LlamatikAiService(
         // If nothing remains, fall back to the first type-signal word found
         // (e.g. "salary" in "record income 1000 salary") as a category hint.
         val strippedDescription = lower
-            .replace(AMOUNT_REGEX, "")
+            .replace(amountRegex, "")
             .replace(STRIP_REGEX, "")
             .trim()
             .takeIf { it.isNotBlank() }
@@ -328,6 +414,12 @@ class LlamatikAiService(
         /** Words that indicate intent to create a new record. */
         private val ACTION_TRIGGERS = listOf("add", "record", "log", "create")
 
+        /** Phrases that indicate a data QUERY, not an ADD action. Checked first to prevent false-positive ADD triggers. */
+        private val QUERY_OVERRIDES = listOf(
+            "what did i", "how much did i", "show me", "list my", "did i",
+            "how many", "tell me", "what's my", "what is my", "am i",
+        )
+
         /** Words that indicate the record is expense-related. */
         private val EXPENSE_SIGNALS = listOf("expense", "spent", "bought", "cost", "purchase")
 
@@ -344,13 +436,23 @@ class LlamatikAiService(
 
         private val RECURRING_KEYWORDS = listOf("recurring", "monthly", "salary", "regular", "subscription")
 
-        /** Matches `$50`, `50 dollars`, `$50.99`, or bare numbers like `50` / `50.99`. */
-        private val AMOUNT_REGEX = Regex("""\$\s*(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s*(?:dollars?|bucks?|\$)?""")
+        /** Strict regex: requires `$` prefix or `dollars`/`bucks` suffix. Used for implicit triggers. */
+        private val AMOUNT_REGEX_STRICT = Regex("""\$\s*(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s*(?:dollars?|bucks?)""")
+
+        /** Bare regex: also matches standalone numbers. Only used with explicit action triggers. */
+        private val AMOUNT_REGEX_BARE = Regex("""\$\s*(\d+(?:\.\d+)?)|(\d+(?:\.\d+)?)\s*(?:dollars?|bucks?|\$)?""")
 
         /** Words to strip when extracting the description/subject of the record. */
         private val STRIP_REGEX = Regex(
-            """\b(?:add|record|log|create|an?|the|for|of|my|i|we|expense|income|spent|paid|bought|got|received|earned|salary|payment|earning|been|was|were|cost|purchase)\b""",
+            """\b(?:add|record|log|create|an?|the|for|of|my|i|we|please|can\s+you|could\s+you|expense|income|spent|paid|bought|got|received|earned|salary|payment|earning|been|was|were|cost|purchase)\b""",
         )
+
+        // Phase 4: Question type classification keywords
+        private val EXPENSE_QUERY_KEYWORDS = listOf("total", "spend", "spent", "balance", "expense")
+        private val INCOME_QUERY_KEYWORDS = listOf("earn", "income", "salary")
+        private val CATEGORY_KEYWORDS = listOf("categor", "biggest", "top", "breakdown", "most")
+        private val RECENT_KEYWORDS = listOf("recent", "latest", "last few", "last 5", "last 10")
+        private val COMPARISON_KEYWORDS = listOf("compared", "last month", "previous", "vs", "versus")
 
         private const val LLM_TIMEOUT_MS = 60_000L
     }
@@ -408,6 +510,40 @@ class LlamatikAiService(
         return "Added income: $currencySymbol${String.format("%.2f", amount)} in ${incomeCategory.name} on $today$desc"
     }
 
+    private fun buildSystemPrompt(today: LocalDate, currencySymbol: String): String =
+        "You are a finance assistant. Today: $today. Currency: $currencySymbol.\nAnswer in 1-3 sentences using only the provided data."
+
+    private fun buildHistoryContext(
+        financialSummary: String,
+        history: List<ChatMessage>,
+        currencySymbol: String,
+    ): String = buildString {
+        // Few-shot example to guide small models on expected format and brevity
+        appendLine("User: How much did I spend this month?")
+        appendLine("Assistant: You spent ${currencySymbol}450.00 this month across 3 categories.")
+        if (financialSummary.isNotBlank()) {
+            appendLine("User: What is my financial data?")
+            appendLine("Assistant: $financialSummary")
+        }
+        history.forEach { msg ->
+            val role = when (msg.role) {
+                ChatRole.USER -> "User"
+                ChatRole.ASSISTANT -> "Assistant"
+            }
+            appendLine("$role: ${msg.content}")
+        }
+    }
+
+    private fun cleanResponse(raw: String): String = raw
+        .substringBefore("\nUser:")
+        .substringBefore("\nAssistant:")
+        .substringBefore("\nHuman:")
+        .substringBefore("\nAI:")
+        .substringBefore("<|im_end|>")
+        .substringBefore("<|endoftext|>")
+        .substringBefore("\n###")
+        .trim()
+
     override suspend fun chat(
         message: String,
         history: List<ChatMessage>,
@@ -434,38 +570,16 @@ class LlamatikAiService(
                             IntentAction.ADD_EXPENSE -> executeAddExpense(intent, currencySymbol)
                             IntentAction.ADD_INCOME -> executeAddIncome(intent, currencySymbol)
                             null -> {
-                                val financialSummary = buildFinancialSummary(today, currencySymbol)
-                                val historyContext = buildString {
-                                    if (financialSummary.isNotBlank()) {
-                                        appendLine("User: What is my financial data?")
-                                        appendLine("Assistant: $financialSummary")
-                                    }
-                                    history.forEach { msg ->
-                                        val role = when (msg.role) {
-                                            ChatRole.USER -> "User"
-                                            ChatRole.ASSISTANT -> "Assistant"
-                                        }
-                                        appendLine("$role: ${msg.content}")
-                                    }
-                                }
-                                val systemPrompt = buildString {
-                                    appendLine("You are a helpful financial assistant. Today is $today.")
-                                    appendLine()
-                                    appendLine("RULES:")
-                                    appendLine("1. Answer questions using ONLY the financial data provided below.")
-                                    appendLine("2. Format all amounts as $currencySymbol followed by the number (e.g., ${currencySymbol}123.45).")
-                                    appendLine("3. Be concise and specific — use actual numbers from the data.")
-                                    appendLine("4. If the data doesn't contain enough info to answer, say so.")
-                                    appendLine("5. This month = ${LocalDate(today.year, today.month, 1)} to $today.")
-                                }
+                                val questionType = classifyQuestionType(message)
+                                val financialSummary = buildFinancialSummaryForType(today, currencySymbol, questionType)
+                                val historyContext = buildHistoryContext(financialSummary, history, currencySymbol)
+                                val systemPrompt = buildSystemPrompt(today, currencySymbol)
                                 val raw = LlamaBridge.generateWithContext(
                                     systemPrompt,
                                     historyContext,
                                     message,
                                 )
-                                raw.substringBefore("\nUser:")
-                                    .substringBefore("\nAssistant:")
-                                    .trim()
+                                cleanResponse(raw)
                             }
                         }
                     }
@@ -476,6 +590,92 @@ class LlamatikAiService(
                 }
             }
         }
+    }
+
+    override fun chatStream(
+        message: String,
+        history: List<ChatMessage>,
+    ): Flow<String> = callbackFlow {
+        if (!isEnabled) {
+            trySend("On-device AI is not available. No model file found.")
+            close()
+            return@callbackFlow
+        }
+
+        val today = Clock.System.now()
+            .toLocalDateTime(TimeZone.currentSystemDefault())
+            .date
+        val currencySymbol = getCurrencySymbol()
+        val intent = classifyIntent(message)
+
+        // Intent-classified ADD commands: emit result instantly, no LLM needed
+        if (intent != null) {
+            mutex.withLock {
+                withContext(Dispatchers.IO) {
+                    try {
+                        withTimeout(LLM_TIMEOUT_MS) {
+                            ensureModelLoaded()
+                            val result = when (intent.action) {
+                                IntentAction.ADD_EXPENSE -> executeAddExpense(intent, currencySymbol)
+                                IntentAction.ADD_INCOME -> executeAddIncome(intent, currencySymbol)
+                            }
+                            trySend(result)
+                        }
+                    } catch (e: TimeoutCancellationException) {
+                        trySend("Sorry, the request timed out. Please try again with a simpler question.")
+                    } catch (e: Exception) {
+                        trySend("Sorry, I encountered an error: ${e.message ?: "Unknown error"}")
+                    }
+                }
+            }
+            close()
+            return@callbackFlow
+        }
+
+        // Q&A path: stream tokens from LlamaBridge
+        val accumulated = StringBuilder()
+
+        launch(Dispatchers.IO) {
+            mutex.withLock {
+                try {
+                    withTimeout(LLM_TIMEOUT_MS) {
+                        ensureModelLoaded()
+                        val questionType = classifyQuestionType(message)
+                        val financialSummary = buildFinancialSummaryForType(today, currencySymbol, questionType)
+                        val historyContext = buildHistoryContext(financialSummary, history, currencySymbol)
+                        val systemPrompt = buildSystemPrompt(today, currencySymbol)
+
+                        LlamaBridge.generateStreamWithContext(
+                            systemPrompt,
+                            historyContext,
+                            message,
+                            object : GenStream {
+                                override fun onDelta(text: String) {
+                                    accumulated.append(text)
+                                    trySend(cleanResponse(accumulated.toString()))
+                                }
+
+                                override fun onComplete() {
+                                    close()
+                                }
+
+                                override fun onError(message: String) {
+                                    close(Exception(message))
+                                }
+                            },
+                        )
+                    }
+                } catch (e: TimeoutCancellationException) {
+                    trySend("Sorry, the request timed out. Please try again with a simpler question.")
+                    close()
+                } catch (e: Exception) {
+                    trySend("Sorry, I encountered an error: ${e.message ?: "Unknown error"}")
+                    close()
+                }
+            }
+        }
+
+        awaitClose()
     }
 
     fun shutdown() {

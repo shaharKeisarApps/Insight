@@ -11,6 +11,7 @@ dependencies {
     implementation(project(":core:common"))
     implementation(project(":core:model"))
     implementation(project(":core:data"))
+    implementation(project(":core:database"))
 
     // Koog AI Agent Framework (cloud)
     implementation(libs.koog.agents)
@@ -22,6 +23,9 @@ dependencies {
 
     // Ktor HTTP client (required by Koog)
     implementation(libs.ktor.client.okhttp)
+
+    // Okio (filesystem abstraction)
+    implementation(libs.okio)
 
     // Coroutines
     implementation(libs.kotlinx.coroutines.android)
