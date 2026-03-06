@@ -11,6 +11,9 @@ on:
       - 'docs/**'
       - 'LICENSE'
 
+permissions:
+  contents: write
+
 concurrency:
   group: ${{ github.workflow }}-${{ github.ref }}
   cancel-in-progress: true
@@ -26,23 +29,43 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@c85c95e3d7a0f598de4e9bb67999d746301dd51b
 
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@99b8673ff64fbf33d533da14c2f5fccc316d7b3b
         with:
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           java-version: ${{ env.JAVA_VERSION }}
 
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@af1da67850ed9a4cedd57bbb36b68e8c1ce8db7f
         with:
           cache-read-only: ${{ github.event_name == 'pull_request' }}
+
+      - name: Update screenshot goldens (main branch only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: ./gradlew updateDebugScreenshotTest --no-daemon
+
+      - name: Commit updated goldens if changed (main branch only)
+        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+          if git diff --quiet; then
+            echo "No screenshot changes"
+          else
+            git add '**/screenshotTestDebug/reference/**/*.png'
+            git commit -m "chore: update screenshot goldens [skip ci]"
+            git push origin main
+          fi
 
       - name: Run tests, screenshot validation, and lint
         run: ./gradlew test validateDebugScreenshotTest :app:lintDebug --continue --no-daemon
 
+      - name: Run Detekt
+        run: ./gradlew detekt
+
       - name: Upload reports
         if: always()
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@8f1d7ea6a5c2569b8e52d6d27a493a52dfc7c340
         with:
           name: quality-reports
           path: |
@@ -56,22 +79,30 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@c85c95e3d7a0f598de4e9bb67999d746301dd51b
 
-      - uses: actions/setup-java@v5
+      - uses: actions/setup-java@99b8673ff64fbf33d533da14c2f5fccc316d7b3b
         with:
           distribution: ${{ env.JAVA_DISTRIBUTION }}
           java-version: ${{ env.JAVA_VERSION }}
 
-      - uses: gradle/actions/setup-gradle@v5
+      - uses: gradle/actions/setup-gradle@af1da67850ed9a4cedd57bbb36b68e8c1ce8db7f
         with:
           cache-read-only: ${{ github.event_name == 'pull_request' }}
 
       - name: Build debug APK
         run: ./gradlew assembleDebug --no-daemon
 
+      - name: Report APK size
+        run: |
+          APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -1)
+          if [ -f "$APK_PATH" ]; then
+            SIZE=$(du -sh "$APK_PATH" | cut -f1)
+            echo "### Debug APK Size: $SIZE" >> $GITHUB_STEP_SUMMARY
+          fi
+
       - name: Upload APK
-        uses: actions/upload-artifact@v7
+        uses: actions/upload-artifact@8f1d7ea6a5c2569b8e52d6d27a493a52dfc7c340
         with:
           name: debug-apk
           path: app/build/outputs/apk/debug/*.apk
