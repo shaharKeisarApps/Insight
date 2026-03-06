@@ -4,6 +4,19 @@ All notable changes to Insight will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.2.0] - 2026-03-06
+
+### Added
+
+- Token streaming for on-device AI chat — responses appear word-by-word as they are generated
+- Chat persistence: conversation history is now saved to the local SQLDelight database and survives app restarts
+- Prompt optimization for on-device inference to reduce latency and improve response quality
+- Month transition animation in Reports screen — category lists animate smoothly when switching between months
+
+### Changed
+
+- Replaced `Application`/`java.io.File` with Okio `Path`/`FileSystem` in `core:ai` for idiomatic file I/O
+
 ## [0.1.1] - 2026-03-04
 
 ### Fixed
