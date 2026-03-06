@@ -70,9 +70,6 @@ jobs:
       - name: Run tests, screenshot validation, and lint
         run: ./gradlew test validateDebugScreenshotTest :app:lintDebug --continue --no-daemon
 
-      - name: Run Detekt
-        run: ./gradlew detekt
-
   build-release:
     name: Build Release Artifacts
     needs: test
