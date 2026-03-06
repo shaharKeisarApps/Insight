@@ -23,7 +23,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
-      - uses: actions/checkout@c85c95e3d7a0f598de4e9bb67999d746301dd51b
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: main
           fetch-depth: 0
@@ -56,7 +56,7 @@ jobs:
     needs: update-screenshots
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@c85c95e3d7a0f598de4e9bb67999d746301dd51b
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           ref: main
 
@@ -79,7 +79,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
-      - uses: actions/checkout@c85c95e3d7a0f598de4e9bb67999d746301dd51b
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
 
       - uses: actions/setup-java@99b8673ff64fbf33d533da14c2f5fccc316d7b3b
         with:
@@ -169,7 +169,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - uses: actions/checkout@c85c95e3d7a0f598de4e9bb67999d746301dd51b
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd
         with:
           fetch-depth: 0
 
