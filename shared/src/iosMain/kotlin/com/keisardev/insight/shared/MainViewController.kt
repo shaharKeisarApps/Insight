@@ -69,7 +69,7 @@ private fun IosMainContent() {
     val currentDestination by remember {
         derivedStateOf {
             val rootScreen = backStack.firstOrNull()?.screen
-            IosAppDestinations.entries.find { it.screen::class == rootScreen?.let { s -> s::class } }
+            IosAppDestinations.entries.find { it.screen == rootScreen }
                 ?: IosAppDestinations.EXPENSES
         }
     }

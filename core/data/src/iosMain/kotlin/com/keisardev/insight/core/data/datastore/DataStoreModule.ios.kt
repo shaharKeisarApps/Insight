@@ -20,13 +20,15 @@ interface IosDataStoreModule {
         @Provides
         @SingleIn(AppScope::class)
         fun provideUserSettingsDataStore(): DataStore<UserSettings> {
-            val documentDir = NSFileManager.defaultManager.URLForDirectory(
-                directory = NSDocumentDirectory,
-                inDomain = NSUserDomainMask,
-                appropriateForURL = null,
-                create = true,
-                error = null,
-            )!!.path!!
+            val documentDir = requireNotNull(
+                NSFileManager.defaultManager.URLForDirectory(
+                    directory = NSDocumentDirectory,
+                    inDomain = NSUserDomainMask,
+                    appropriateForURL = null,
+                    create = true,
+                    error = null,
+                )?.path
+            ) { "Could not locate iOS Documents directory" }
             return DataStoreFactory.create(
                 storage = OkioStorage(
                     fileSystem = FileSystem.SYSTEM,

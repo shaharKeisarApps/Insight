@@ -44,7 +44,6 @@ DerivedData/
 
 # Kotlin/Native & KMP
 *.framework/
-!shared/build/xcode-frameworks/
 
 # Desktop (for future KMP expansion)
 *.dmg

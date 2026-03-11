@@ -4,6 +4,8 @@ import com.keisardev.insight.core.common.di.AppScope
 import com.keisardev.insight.core.data.datastore.IosDataStoreModule
 import com.keisardev.insight.core.data.datastore.UserSettingsRepository
 import com.keisardev.insight.core.data.datastore.UserSettingsRepositoryImpl
+import com.keisardev.insight.core.common.CurrencyProvider
+import com.keisardev.insight.core.data.provider.IosCurrencyProvider
 import com.keisardev.insight.core.data.repository.CategoryRepository
 import com.keisardev.insight.core.data.repository.CategoryRepositoryImpl
 import com.keisardev.insight.core.data.repository.ExpenseRepository
@@ -57,6 +59,9 @@ interface IosAppGraph : IosDatabaseModule, IosDataStoreModule {
 
     @Binds
     fun bindUserSettingsRepository(impl: UserSettingsRepositoryImpl): UserSettingsRepository
+
+    @Binds
+    fun bindCurrencyProvider(impl: IosCurrencyProvider): CurrencyProvider
 
     @DependencyGraph.Factory
     fun interface Factory {
