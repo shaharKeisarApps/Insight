@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ExpensesScreen -->
+    <string name="expenses_add_expense">Add expense</string>
+    <string name="expenses_empty_title">No expenses yet</string>
+    <string name="expenses_empty_subtitle">Tap + to add your first expense</string>
+
+    <!-- AddEditExpenseScreen -->
+    <string name="expenses_edit_title">Edit Expense</string>
+    <string name="expenses_add_title">Add Expense</string>
+    <string name="expenses_back">Back</string>
+    <string name="expenses_delete">Delete</string>
+    <string name="expenses_save">Save</string>
+    <string name="expenses_amount_label">Amount</string>
+    <string name="expenses_amount_prefix">$</string>
+    <string name="expenses_description_label">Description (optional)</string>
+    <string name="expenses_date_label">Date</string>
+    <string name="expenses_select_date">Select date</string>
+    <string name="expenses_category_label">Category</string>
+    <string name="expenses_update_button">Update Expense</string>
+    <string name="expenses_add_button">Add Expense</string>
+    <string name="expenses_ok">OK</string>
+    <string name="expenses_cancel">Cancel</string>
+    <string name="expenses_delete_dialog_title">Delete Expense?</string>
+    <string name="expenses_delete_dialog_message">This action cannot be undone.</string>
+    <string name="expenses_delete_confirm">Delete</string>
+</resources>

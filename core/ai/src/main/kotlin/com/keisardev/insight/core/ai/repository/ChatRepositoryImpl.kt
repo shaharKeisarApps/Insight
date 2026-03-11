@@ -23,7 +23,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.datetime.Instant
 import java.util.concurrent.atomic.AtomicBoolean
 import java.util.concurrent.atomic.AtomicLong
@@ -60,14 +60,15 @@ class ChatRepositoryImpl(
 
     private suspend fun hydrateIfNeeded() {
         if (hydrated.getAndSet(true)) return
-        try {
-            val entities = localDataSource.observeAll().first()
-            if (entities.isNotEmpty()) {
-                val messages = entities.map { it.toDomainModel() }
-                _messages.value = messages
+        mutex.withLock {
+            try {
+                val entities = localDataSource.observeAll().first()
+                if (entities.isNotEmpty() && _messages.value.isEmpty()) {
+                    _messages.value = entities.map { it.toDomainModel() }
+                }
+            } catch (_: Exception) {
+                // First launch or empty DB — no-op
             }
-        } catch (_: Exception) {
-            // First launch or empty DB — no-op
         }
     }
 
@@ -185,6 +186,8 @@ class ChatRepositoryImpl(
         }
         persistMessage(userMessage)
 
+        _isLoading.value = true
+
         val placeholderId = generateMessageId("assistant")
         val placeholder = ChatMessage(
             id = placeholderId,
@@ -196,8 +199,6 @@ class ChatRepositoryImpl(
         mutex.withLock {
             _messages.update { it + placeholder }
         }
-
-        _isLoading.value = true
 
         try {
             val historyForService = _messages.value
@@ -242,7 +243,11 @@ class ChatRepositoryImpl(
     }
 
     override suspend fun clearHistory(addWelcomeMessage: Boolean) {
-        localDataSource.deleteAll()
+        try {
+            localDataSource.deleteAll()
+        } catch (_: Exception) {
+            // DB may not be migrated yet — non-fatal
+        }
         mutex.withLock {
             _messages.value = if (addWelcomeMessage && isEnabled) {
                 listOf(createWelcomeMessage())
@@ -263,10 +268,8 @@ class ChatRepositoryImpl(
     private suspend fun trimOldMessages() {
         try {
             if (localDataSource.count() > MAX_PERSISTED_MESSAGES) {
-                // Reload from DB with limit, delete all, re-insert recent
-                val recent = localDataSource.observeAll().first().takeLast(MAX_PERSISTED_MESSAGES.toInt())
-                localDataSource.deleteAll()
-                recent.forEach { localDataSource.insert(it) }
+                // Atomic delete: remove oldest messages keeping the most recent N
+                localDataSource.deleteOldest(keepCount = MAX_PERSISTED_MESSAGES)
             }
         } catch (_: Exception) {
             // Best-effort trim

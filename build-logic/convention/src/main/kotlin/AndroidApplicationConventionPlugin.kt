@@ -8,12 +8,14 @@ class AndroidApplicationConventionPlugin : Plugin<Project> {
         with(target) {
             with(pluginManager) {
                 apply(versionCatalog.findPlugin("android-application").get().get().pluginId)
-                apply(versionCatalog.findPlugin("kotlin-android").get().get().pluginId)
             }
 
             extensions.configure<ApplicationExtension> {
-                configureKotlinAndroid(this)
-                defaultConfig.targetSdk = ProjectConfig.TARGET_SDK
+                compileSdk = ProjectConfig.COMPILE_SDK
+                defaultConfig {
+                    minSdk = ProjectConfig.MIN_SDK
+                    targetSdk = ProjectConfig.TARGET_SDK
+                }
             }
         }
     }

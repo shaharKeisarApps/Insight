@@ -21,6 +21,7 @@ build/
 # Kotlin
 *.class
 *.kotlin_module
+.kotlin/
 
 # Android
 local.properties
@@ -31,13 +32,18 @@ local.properties
 .externalNativeBuild/
 .cxx/
 
-# iOS (for future KMP expansion)
-*.xcuserdata/
+# iOS / Xcode
+**/xcuserdata/
 *.xcworkspace/
 !*.xcworkspace/contents.xcworkspacedata
 Pods/
 DerivedData/
 *.ipa
+*.dSYM.zip
+*.dSYM
+
+# Kotlin/Native & KMP
+*.framework/
 
 # Desktop (for future KMP expansion)
 *.dmg

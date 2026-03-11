@@ -32,4 +32,8 @@ dependencies {
 
     // DateTime
     implementation(libs.kotlinx.datetime)
+
+    // Testing
+    testImplementation(libs.junit)
+    testImplementation(libs.truth)
 }

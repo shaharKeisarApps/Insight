@@ -1,0 +1,41 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ModelSetupBottomSheet -->
+    <string name="model_setup_title">Set Up On-Device AI</string>
+    <string name="model_setup_subtitle">Run AI locally on your device \u2014 no internet needed after download</string>
+    <string name="model_setup_installed_models">Installed Models (%1$d)</string>
+    <string name="model_setup_download_another">Download Another Model</string>
+    <string name="model_setup_done">Done</string>
+    <string name="model_setup_search_placeholder">Search HuggingFace models\u2026</string>
+    <string name="model_setup_search">Search</string>
+    <string name="model_setup_search_results">Search Results</string>
+    <string name="model_setup_curated_models">Curated Models</string>
+    <string name="model_setup_download">Download</string>
+    <string name="model_setup_active_model">Active model</string>
+    <string name="model_setup_in_use">In Use</string>
+    <string name="model_setup_installed">Installed</string>
+    <string name="model_setup_no_local_model">No local model installed</string>
+    <string name="model_setup_tap_to_setup">Tap to set up on-device AI</string>
+    <string name="model_setup_choosing_title">Choosing a model</string>
+    <string name="model_setup_choosing_description">For on-device finance tracking, small instruct/chat models work best (0.5B\u20133B parameters). Look for Q4_K_M or Q8_0 quantizations and \u201Cinstruct\u201D or \u201Cchat\u201D variants.</string>
+    <string name="model_setup_delete_model">Delete model</string>
+
+    <!-- CloudSetupBottomSheet -->
+    <string name="cloud_setup_title">Configure Cloud AI</string>
+    <string name="cloud_setup_subtitle">Enter your API key to use cloud-based AI models</string>
+    <string name="cloud_setup_using_dev_key">Using developer key</string>
+    <string name="cloud_setup_openai_key_label">OpenAI API Key</string>
+    <string name="cloud_setup_gemini_key_label">Gemini API Key</string>
+    <string name="cloud_setup_api_key_label">API Key</string>
+    <string name="cloud_setup_openai_placeholder">sk-\u2026</string>
+    <string name="cloud_setup_gemini_placeholder">AI\u2026</string>
+    <string name="cloud_setup_key_placeholder">Enter API key</string>
+    <string name="cloud_setup_hide_key">Hide key</string>
+    <string name="cloud_setup_show_key">Show key</string>
+    <string name="cloud_setup_select_model">Select Model</string>
+    <string name="cloud_setup_save">Save</string>
+
+    <!-- ModelDownloadProgress -->
+    <string name="model_download_progress">Downloading\u2026 %1$d%%</string>
+    <string name="model_download_cancel">Cancel</string>
+</resources>

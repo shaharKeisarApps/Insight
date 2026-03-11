@@ -1,30 +1,32 @@
 plugins {
-    alias(libs.plugins.insight.android.feature)
-    alias(libs.plugins.screenshot)
+    alias(libs.plugins.insight.kmp.feature)
 }
 
-android {
-    namespace = "com.keisardev.insight.feature.aichat"
+compose.resources {
+    publicResClass = true
+    packageOfResClass = "com.keisardev.insight.feature.aichat.generated.resources"
+    generateResClass = always
+}
 
-    testOptions {
-        unitTests {
-            isIncludeAndroidResources = true
-        }
+kotlin {
+    android {
+        namespace = "com.keisardev.insight.feature.aichat"
+        compileSdk = ProjectConfig.COMPILE_SDK
+        minSdk = ProjectConfig.MIN_SDK
+        withHostTestBuilder {}.configure {}
     }
 
-    experimentalProperties["android.experimental.enableScreenshotTest"] = true
-}
-
-dependencies {
-    implementation(project(":core:ai"))
-
-    testImplementation(libs.junit)
-    testImplementation(libs.truth)
-    testImplementation(libs.turbine)
-    testImplementation(libs.kotlinx.coroutines.test)
-    testImplementation(libs.circuit.test)
-    testImplementation(libs.robolectric)
-
-    screenshotTestImplementation(libs.screenshot.validation.api)
-    screenshotTestImplementation(libs.androidx.compose.ui.tooling)
+    sourceSets {
+        androidMain.dependencies {
+            implementation(project(":core:ai"))
+        }
+        getByName("androidHostTest").dependencies {
+            implementation(libs.junit)
+            implementation(libs.truth)
+            implementation(libs.turbine)
+            implementation(libs.kotlinx.coroutines.test)
+            implementation(libs.circuit.test)
+            implementation(libs.robolectric)
+        }
+    }
 }

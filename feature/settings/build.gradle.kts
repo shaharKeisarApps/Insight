@@ -1,17 +1,23 @@
 plugins {
-    alias(libs.plugins.insight.android.feature)
-    alias(libs.plugins.screenshot)
+    alias(libs.plugins.insight.kmp.feature)
 }
 
-android {
-    namespace = "com.keisardev.insight.feature.settings"
-
-    experimentalProperties["android.experimental.enableScreenshotTest"] = true
+compose.resources {
+    publicResClass = true
+    packageOfResClass = "com.keisardev.insight.feature.settings.generated.resources"
+    generateResClass = always
 }
 
-dependencies {
-    implementation(project(":core:ai"))
+kotlin {
+    android {
+        namespace = "com.keisardev.insight.feature.settings"
+        compileSdk = ProjectConfig.COMPILE_SDK
+        minSdk = ProjectConfig.MIN_SDK
+    }
 
-    screenshotTestImplementation(libs.screenshot.validation.api)
-    screenshotTestImplementation(libs.androidx.compose.ui.tooling)
+    sourceSets {
+        androidMain.dependencies {
+            implementation(project(":core:ai"))
+        }
+    }
 }

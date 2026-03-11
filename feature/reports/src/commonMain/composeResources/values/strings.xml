@@ -1,0 +1,16 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- ReportsScreen -->
+    <string name="reports_total_spending">Total Spending</string>
+    <string name="reports_total_earnings">Total Earnings</string>
+    <string name="reports_no_expenses">No expenses this month</string>
+    <string name="reports_no_earnings">No earnings this month</string>
+    <string name="reports_by_category">By Category</string>
+    <string name="reports_saving_money">You\'re saving money!</string>
+    <string name="reports_spending_exceeds">Spending exceeds income</string>
+    <string name="reports_savings_rate">Savings rate: %1$d%%</string>
+    <string name="reports_income_label">Income</string>
+    <string name="reports_expenses_label">Expenses</string>
+    <string name="reports_previous_month">Previous month</string>
+    <string name="reports_next_month">Next month</string>
+</resources>

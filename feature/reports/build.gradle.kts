@@ -1,28 +1,29 @@
 plugins {
-    alias(libs.plugins.insight.android.feature)
-    alias(libs.plugins.screenshot)
+    alias(libs.plugins.insight.kmp.feature)
 }
 
-android {
-    namespace = "com.keisardev.insight.feature.reports"
+compose.resources {
+    publicResClass = true
+    packageOfResClass = "com.keisardev.insight.feature.reports.generated.resources"
+    generateResClass = always
+}
 
-    testOptions {
-        unitTests {
-            isIncludeAndroidResources = true
-        }
+kotlin {
+    android {
+        namespace = "com.keisardev.insight.feature.reports"
+        compileSdk = ProjectConfig.COMPILE_SDK
+        minSdk = ProjectConfig.MIN_SDK
+        withHostTestBuilder {}.configure {}
     }
 
-    experimentalProperties["android.experimental.enableScreenshotTest"] = true
-}
-
-dependencies {
-    testImplementation(libs.junit)
-    testImplementation(libs.truth)
-    testImplementation(libs.turbine)
-    testImplementation(libs.kotlinx.coroutines.test)
-    testImplementation(libs.circuit.test)
-    testImplementation(libs.robolectric)
-
-    screenshotTestImplementation(libs.screenshot.validation.api)
-    screenshotTestImplementation(libs.androidx.compose.ui.tooling)
+    sourceSets {
+        getByName("androidHostTest").dependencies {
+            implementation(libs.junit)
+            implementation(libs.truth)
+            implementation(libs.turbine)
+            implementation(libs.kotlinx.coroutines.test)
+            implementation(libs.circuit.test)
+            implementation(libs.robolectric)
+        }
+    }
 }

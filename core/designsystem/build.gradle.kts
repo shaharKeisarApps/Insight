@@ -1,15 +1,24 @@
 plugins {
-    alias(libs.plugins.insight.android.library)
-    alias(libs.plugins.insight.android.compose)
+    alias(libs.plugins.insight.kmp.compose)
 }
 
-android {
-    namespace = "com.keisardev.insight.core.designsystem"
-}
+kotlin {
+    android {
+        namespace = "com.keisardev.insight.core.designsystem"
+        compileSdk = ProjectConfig.COMPILE_SDK
+        minSdk = ProjectConfig.MIN_SDK
+    }
 
-dependencies {
-    api(libs.androidx.compose.material3)
-    api(libs.androidx.compose.ui)
-    api(libs.androidx.compose.ui.tooling.preview)
-    debugApi(libs.androidx.compose.ui.tooling)
+    sourceSets {
+        commonMain.dependencies {
+            api(compose.material3)
+            api(compose.ui)
+            api(compose.foundation)
+        }
+        androidMain.dependencies {
+            api(libs.androidx.compose.ui.tooling.preview)
+            api(libs.androidx.compose.ui.tooling)
+            api(libs.androidx.compose.material3.expressive)
+        }
+    }
 }

@@ -1,0 +1,44 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- SettingsScreen -->
+    <string name="settings_title">Settings</string>
+    <string name="settings_manage_categories">Manage Categories</string>
+    <string name="settings_categories_count">%1$d categories</string>
+    <string name="settings_coming_soon">Coming soon</string>
+    <string name="settings_currency">Currency</string>
+    <string name="settings_multi_currency">Multi-Currency Tracking</string>
+    <string name="settings_multi_currency_subtitle">Track items in different currencies \u2014 Coming Soon</string>
+    <string name="settings_multi_currency_snackbar">Multi-currency tracking with conversion is coming in a future update</string>
+    <string name="settings_clear_data_title">Clear All Data</string>
+    <string name="settings_clear_data_subtitle">Delete all expenses and income</string>
+    <string name="settings_about">About</string>
+    <string name="settings_version">Version 0.1.0</string>
+    <string name="settings_version_snackbar">Insight v0.1.0</string>
+    <string name="settings_built_with">Built with Circuit + Metro DI</string>
+    <string name="settings_clear_data_dialog_title">Clear All Data?</string>
+    <string name="settings_clear_data_dialog_message">This will delete all your expenses and income. This action cannot be undone.</string>
+    <string name="settings_clear_confirm">Clear</string>
+    <string name="settings_cancel">Cancel</string>
+    <string name="settings_select_currency">Select Currency</string>
+    <string name="settings_selected">Selected</string>
+
+    <!-- AI Engine Card -->
+    <string name="settings_ai_engine">AI Engine</string>
+    <string name="settings_ai_on_device">On-Device</string>
+    <string name="settings_ai_cloud">Cloud</string>
+    <string name="settings_ai_auto">Auto</string>
+    <string name="settings_ai_downloading">Downloading model\u2026 %1$d%%</string>
+    <string name="settings_ai_local_ready">On-device model ready \u2014 %1$s</string>
+    <string name="settings_ai_auto_ready">On-device model ready \u2014 cloud as fallback</string>
+    <string name="settings_ai_download_failed">Download failed: %1$s</string>
+    <string name="settings_ai_local_available">Using on-device model \u2014 no internet needed</string>
+    <string name="settings_ai_no_local">No local model \u2014 download one from AI Chat</string>
+    <string name="settings_ai_auto_local_active">On-device model active \u2014 cloud as fallback</string>
+    <string name="settings_ai_auto_cloud_active">Cloud API active \u2014 no local model found</string>
+    <string name="settings_ai_no_backend">No AI backend available</string>
+    <string name="settings_ai_cloud_setup">Tap Configure Cloud to set up</string>
+    <string name="settings_ai_cloud_using">Using %1$s \u2014 %2$s</string>
+    <string name="settings_ai_cloud_using_dev">Using %1$s \u2014 %2$s (dev key)</string>
+    <string name="settings_manage_model">Manage Model</string>
+    <string name="settings_configure_cloud">Configure Cloud</string>
+</resources>

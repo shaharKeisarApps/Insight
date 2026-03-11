@@ -1,11 +1,21 @@
 plugins {
-    alias(libs.plugins.insight.android.library)
+    alias(libs.plugins.insight.kmp.library)
+    alias(libs.plugins.kotlin.parcelize)
 }
 
-android {
-    namespace = "com.keisardev.insight.core.common"
-}
+kotlin {
+    android {
+        namespace = "com.keisardev.insight.core.common"
+        compileSdk = ProjectConfig.COMPILE_SDK
+        minSdk = ProjectConfig.MIN_SDK
+    }
 
-dependencies {
-    api(libs.kotlinx.coroutines.android)
+    sourceSets {
+        commonMain.dependencies {
+            api(libs.kotlinx.coroutines.core)
+        }
+        androidMain.dependencies {
+            api(libs.kotlinx.coroutines.android)
+        }
+    }
 }

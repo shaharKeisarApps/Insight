@@ -46,6 +46,16 @@
 # ── Llamatik / llama.cpp JNI ─────────────────────────────────────
 -keep class com.llamatik.** { *; }
 
+# ── kotlinx.datetime (transitive via Koog) ──────────────────────
+-keep class kotlinx.datetime.** { *; }
+-dontwarn kotlinx.datetime.**
+
 # ── R8 full mode optimizations ───────────────────────────────────
 -allowaccessmodification
 -repackageclasses
+
+# ── Strip debug/verbose logging in release builds ──────────────────
+-assumenosideeffects class android.util.Log {
+    public static int d(...);
+    public static int v(...);
+}

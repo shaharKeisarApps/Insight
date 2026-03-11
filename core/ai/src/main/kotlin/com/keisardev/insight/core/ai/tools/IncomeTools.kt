@@ -8,7 +8,7 @@ import com.keisardev.insight.core.data.repository.IncomeRepository
 import com.keisardev.insight.core.model.Income
 import com.keisardev.insight.core.model.IncomeType
 import kotlinx.coroutines.flow.first
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime

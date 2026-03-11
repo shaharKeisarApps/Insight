@@ -1,16 +1,23 @@
 plugins {
-    alias(libs.plugins.insight.android.library)
-    alias(libs.plugins.kotlin.parcelize)
+    alias(libs.plugins.insight.kmp.library)
 }
 
-android {
-    namespace = "com.keisardev.insight.core.model"
-}
+kotlin {
+    android {
+        namespace = "com.keisardev.insight.core.model"
+        compileSdk = ProjectConfig.COMPILE_SDK
+        minSdk = ProjectConfig.MIN_SDK
+        withHostTestBuilder {}.configure {}
+    }
 
-dependencies {
-    implementation(project(":core:common"))
-    api(libs.kotlinx.datetime)
-
-    testImplementation(libs.junit)
-    testImplementation(libs.truth)
+    sourceSets {
+        commonMain.dependencies {
+            implementation(project(":core:common"))
+            api(libs.kotlinx.datetime)
+        }
+        getByName("androidHostTest").dependencies {
+            implementation(libs.junit)
+            implementation(libs.truth)
+        }
+    }
 }
