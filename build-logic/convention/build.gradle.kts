@@ -24,7 +24,9 @@ dependencies {
     compileOnly(libs.android.gradlePlugin)
     compileOnly(libs.kotlin.gradlePlugin)
     compileOnly(libs.compose.gradlePlugin)
+    compileOnly(libs.composeMultiplatform.gradlePlugin)
     compileOnly(libs.ksp.gradlePlugin)
+    compileOnly(libs.sqldelight.gradlePlugin)
 }
 
 tasks {
@@ -51,6 +53,18 @@ gradlePlugin {
         register("androidFeature") {
             id = libs.plugins.insight.android.feature.get().pluginId
             implementationClass = "AndroidFeatureConventionPlugin"
+        }
+        register("kmpLibrary") {
+            id = libs.plugins.insight.kmp.library.get().pluginId
+            implementationClass = "KmpLibraryConventionPlugin"
+        }
+        register("kmpCompose") {
+            id = libs.plugins.insight.kmp.compose.get().pluginId
+            implementationClass = "KmpComposeConventionPlugin"
+        }
+        register("kmpFeature") {
+            id = libs.plugins.insight.kmp.feature.get().pluginId
+            implementationClass = "KmpFeatureConventionPlugin"
         }
     }
 }

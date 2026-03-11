@@ -1,0 +1,56 @@
+{
+  "device": {
+    "name": "iPhone 16 Pro",
+    "uuid": "19294E3B-EB01-4CAC-8657-351A44894157",
+    "platform": "iOS Simulator",
+    "os_version": "18.4",
+    "screen": {
+      "width_points": 393,
+      "height_points": 852,
+      "scale": 3,
+      "width_pixels": 1179,
+      "height_pixels": 2556
+    }
+  },
+  "app": {
+    "bundle_id": "com.keisardev.insight.ios",
+    "display_name": "iosApp",
+    "framework_path": "shared/build/bin/iosSimulatorArm64/debugFramework/shared.framework",
+    "xcode_project": "iosApp/iosApp.xcodeproj",
+    "scheme": "iosApp",
+    "configuration": "Debug"
+  },
+  "build": {
+    "gradle_framework": "./gradlew :shared:linkDebugFrameworkIosSimulatorArm64",
+    "xcode_build": "xcodebuild -project iosApp/iosApp.xcodeproj -scheme iosApp -sdk iphonesimulator -destination 'platform=iOS Simulator,name=iPhone 16 Pro' -configuration Debug build",
+    "xcodegen_regenerate": "cd iosApp && xcodegen generate && cd ..",
+    "derived_data_app_glob": "~/Library/Developer/Xcode/DerivedData/iosApp-*/Build/Products/Debug-iphonesimulator/iosApp.app"
+  },
+  "install": {
+    "simctl_install": "xcrun simctl install 19294E3B-EB01-4CAC-8657-351A44894157 <app_path>",
+    "simctl_launch": "xcrun simctl launch 19294E3B-EB01-4CAC-8657-351A44894157 com.keisardev.insight.ios",
+    "simctl_terminate": "xcrun simctl terminate 19294E3B-EB01-4CAC-8657-351A44894157 com.keisardev.insight.ios"
+  },
+  "screens": {
+    "placeholder": {
+      "description": "Initial placeholder screen — full Circuit navigation pending",
+      "expected_text": "Insight for iOS",
+      "status": "active"
+    }
+  },
+  "screenshot_dir": "/tmp/ios-screenshots",
+  "notes": [
+    "Currently shows placeholder UI — full Circuit navigation not yet wired",
+    "AI features not available on iOS (core/ai module is Android-only)",
+    "Use XcodeGen to regenerate the Xcode project: cd iosApp && xcodegen generate",
+    "xcrun simctl io tap requires Xcode 14+ (command available in Xcode 14.3+)",
+    "Accessibility tree dump (xcrun simctl ui) requires Xcode 15+ with --accessibility flag",
+    "Screen coordinates are in logical points (not physical pixels) — divide pixel coords by scale (3)"
+  ],
+  "fallback_coordinates": {
+    "_note": "Logical-point coordinates for iPhone 16 Pro (393x852 points). Use these if xcrun simctl io tap is unavailable.",
+    "screen_center": { "x": 196, "y": 426 },
+    "top_center": { "x": 196, "y": 100 },
+    "placeholder_text_approx": { "x": 196, "y": 426 }
+  }
+}

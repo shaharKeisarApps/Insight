@@ -15,6 +15,7 @@ import com.keisardev.insight.core.ai.tools.ExpenseTools
 import com.keisardev.insight.core.ai.tools.FinancialSummaryTools
 import com.keisardev.insight.core.ai.tools.IncomeTools
 import com.keisardev.insight.core.common.di.AppScope
+import com.keisardev.insight.core.common.CurrencyProvider
 import com.keisardev.insight.core.data.datastore.UserSettingsRepository
 import com.keisardev.insight.core.data.repository.CategoryRepository
 import com.keisardev.insight.core.data.repository.ExpenseRepository
@@ -29,7 +30,7 @@ import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
-import kotlinx.datetime.Clock
+import kotlin.time.Clock
 import kotlinx.datetime.LocalDate
 import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
@@ -50,6 +51,7 @@ class KoogAiService(
     private val incomeCategoryRepository: IncomeCategoryRepository,
     private val financialSummaryRepository: FinancialSummaryRepository,
     private val userSettingsRepository: UserSettingsRepository,
+    private val currencyProvider: CurrencyProvider,
 ) : AiService {
 
     /** Key used to detect when the executor needs to be recreated. */
@@ -90,19 +92,7 @@ class KoogAiService(
         )!!
     }
 
-    private suspend fun getCurrencySymbol(): String {
-        return try {
-            val settings = userSettingsRepository.observeSettings().first()
-            val code = settings.currencyCode
-            if (code == "DEVICE") {
-                java.util.Currency.getInstance(java.util.Locale.getDefault()).symbol
-            } else {
-                java.util.Currency.getInstance(code).symbol
-            }
-        } catch (_: Exception) {
-            "$"
-        }
-    }
+    private suspend fun getCurrencySymbol(): String = currencyProvider.getCurrencySymbol()
 
     private fun createToolRegistry(currencySymbol: String): ToolRegistry {
         return ToolRegistry {

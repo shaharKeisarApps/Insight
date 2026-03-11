@@ -1,6 +1,12 @@
 plugins {
-    alias(libs.plugins.insight.android.feature)
+    alias(libs.plugins.insight.kmp.feature)
     alias(libs.plugins.screenshot)
+}
+
+compose.resources {
+    publicResClass = true
+    packageOfResClass = "com.keisardev.insight.feature.expenses.generated.resources"
+    generateResClass = always
 }
 
 android {

@@ -1,0 +1,10 @@
+-- Migration from version 1 to version 2: Add ChatMessage table for chat persistence
+
+CREATE TABLE ChatMessage (
+    id TEXT PRIMARY KEY NOT NULL,
+    content TEXT NOT NULL,
+    role TEXT NOT NULL,
+    timestamp INTEGER NOT NULL
+);
+
+CREATE INDEX chat_message_timestamp_idx ON ChatMessage(timestamp ASC);

@@ -1,18 +1,32 @@
 plugins {
-    alias(libs.plugins.insight.android.library)
-    alias(libs.plugins.insight.android.compose)
+    alias(libs.plugins.insight.kmp.compose)
 }
 
 android {
     namespace = "com.keisardev.insight.core.ui"
 }
 
-dependencies {
-    implementation(project(":core:common"))
-    implementation(project(":core:model"))
-    api(project(":core:designsystem"))
+compose.resources {
+    publicResClass = true
+    packageOfResClass = "com.keisardev.insight.core.ui.generated.resources"
+    generateResClass = always
+}
 
-    api(libs.androidx.compose.material.icons.extended)
-    implementation(libs.androidx.activity.compose)
-    implementation(libs.kotlinx.datetime)
+kotlin {
+    sourceSets {
+        commonMain.dependencies {
+            implementation(project(":core:common"))
+            implementation(project(":core:model"))
+            api(project(":core:designsystem"))
+
+            api(compose.material3)
+            api(compose.materialIconsExtended)
+            implementation(compose.components.resources)
+            implementation(libs.kotlinx.datetime)
+        }
+        androidMain.dependencies {
+            implementation(libs.androidx.activity.compose)
+            implementation(libs.androidx.compose.material3.expressive)
+        }
+    }
 }

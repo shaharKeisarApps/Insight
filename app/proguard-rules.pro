@@ -49,3 +49,9 @@
 # ── R8 full mode optimizations ───────────────────────────────────
 -allowaccessmodification
 -repackageclasses
+
+# ── Strip debug/verbose logging in release builds ──────────────────
+-assumenosideeffects class android.util.Log {
+    public static int d(...);
+    public static int v(...);
+}

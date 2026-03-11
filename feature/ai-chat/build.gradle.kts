@@ -1,6 +1,12 @@
 plugins {
-    alias(libs.plugins.insight.android.feature)
+    alias(libs.plugins.insight.kmp.feature)
     alias(libs.plugins.screenshot)
+}
+
+compose.resources {
+    publicResClass = true
+    packageOfResClass = "com.keisardev.insight.feature.aichat.generated.resources"
+    generateResClass = always
 }
 
 android {
@@ -15,9 +21,15 @@ android {
     experimentalProperties["android.experimental.enableScreenshotTest"] = true
 }
 
-dependencies {
-    implementation(project(":core:ai"))
+kotlin {
+    sourceSets {
+        androidMain.dependencies {
+            implementation(project(":core:ai"))
+        }
+    }
+}
 
+dependencies {
     testImplementation(libs.junit)
     testImplementation(libs.truth)
     testImplementation(libs.turbine)

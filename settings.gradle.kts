@@ -33,6 +33,7 @@ include(":core:data")
 include(":core:designsystem")
 include(":core:ui")
 include(":core:ai")
+include(":core:testing")
 
 // Feature modules
 include(":feature:expenses")
@@ -40,6 +41,9 @@ include(":feature:income")
 include(":feature:reports")
 include(":feature:settings")
 include(":feature:ai-chat")
+
+// Shared KMP umbrella module (produces the iOS framework)
+include(":shared")
 
 // Testing & Performance
 include(":benchmark")

@@ -31,13 +31,19 @@ local.properties
 .externalNativeBuild/
 .cxx/
 
-# iOS (for future KMP expansion)
-*.xcuserdata/
+# iOS / Xcode
+**/xcuserdata/
 *.xcworkspace/
 !*.xcworkspace/contents.xcworkspacedata
 Pods/
 DerivedData/
 *.ipa
+*.dSYM.zip
+*.dSYM
+
+# Kotlin/Native & KMP
+*.framework/
+!shared/build/xcode-frameworks/
 
 # Desktop (for future KMP expansion)
 *.dmg

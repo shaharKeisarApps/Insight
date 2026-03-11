@@ -1,0 +1,30 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- IncomeScreen -->
+    <string name="income_add_income">Add income</string>
+    <string name="income_empty_title">No earnings recorded yet</string>
+    <string name="income_empty_subtitle">Tap + to add your first income</string>
+    <string name="income_type_recurring">Recurring</string>
+    <string name="income_type_one_time">One-time</string>
+
+    <!-- AddEditIncomeScreen -->
+    <string name="income_edit_title">Edit Income</string>
+    <string name="income_add_title">Add Income</string>
+    <string name="income_back">Back</string>
+    <string name="income_delete">Delete</string>
+    <string name="income_save">Save</string>
+    <string name="income_type_label">Income Type</string>
+    <string name="income_amount_label">Amount</string>
+    <string name="income_amount_prefix">$</string>
+    <string name="income_description_label">Description (optional)</string>
+    <string name="income_date_label">Date</string>
+    <string name="income_select_date">Select date</string>
+    <string name="income_category_label">Category</string>
+    <string name="income_update_button">Update Income</string>
+    <string name="income_add_button">Add Income</string>
+    <string name="income_ok">OK</string>
+    <string name="income_cancel">Cancel</string>
+    <string name="income_delete_dialog_title">Delete Income?</string>
+    <string name="income_delete_dialog_message">This action cannot be undone.</string>
+    <string name="income_delete_confirm">Delete</string>
+</resources>

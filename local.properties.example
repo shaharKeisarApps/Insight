@@ -1,0 +1,14 @@
+# Copy this file to local.properties and fill in your values
+# local.properties is gitignored and should NEVER be committed
+
+# Android SDK path (usually auto-configured by Android Studio)
+sdk.dir=/path/to/android/sdk
+
+# OpenAI API key for cloud AI features (optional)
+OPENAI_API_KEY=your-openai-api-key-here
+
+# Release signing (optional, for release builds)
+KEYSTORE_PATH=release.keystore
+KEYSTORE_PASSWORD=
+KEY_ALIAS=
+KEY_PASSWORD=
