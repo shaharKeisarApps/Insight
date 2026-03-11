@@ -21,6 +21,7 @@ build/
 # Kotlin
 *.class
 *.kotlin_module
+.kotlin/
 
 # Android
 local.properties
