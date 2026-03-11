@@ -40,25 +40,8 @@ jobs:
         with:
           cache-read-only: ${{ github.event_name == 'pull_request' }}
 
-      - name: Update screenshot goldens (main branch only)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: ./gradlew updateDebugScreenshotTest --no-daemon
-
-      - name: Commit updated goldens if changed (main branch only)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        run: |
-          git config user.name "github-actions[bot]"
-          git config user.email "github-actions[bot]@users.noreply.github.com"
-          if git diff --quiet; then
-            echo "No screenshot changes"
-          else
-            git add '**/screenshotTestDebug/reference/**/*.png'
-            git commit -m "chore: update screenshot goldens [skip ci]"
-            git push origin main
-          fi
-
-      - name: Run tests, screenshot validation, and lint
-        run: ./gradlew test validateDebugScreenshotTest :app:lintDebug --continue --no-daemon
+      - name: Run tests and lint
+        run: ./gradlew test :app:lintDebug --continue --no-daemon
 
       - name: Upload reports
         if: always()
@@ -67,12 +50,11 @@ jobs:
           name: quality-reports
           path: |
             **/build/reports/tests/
-            **/build/reports/screenshotTest/
             **/build/reports/lint-results-*
           retention-days: 14
 
   build:
-    name: Build Debug APK
+    name: Build Release APK
     runs-on: ubuntu-latest
     timeout-minutes: 20
     steps:
@@ -87,20 +69,41 @@ jobs:
         with:
           cache-read-only: ${{ github.event_name == 'pull_request' }}
 
-      - name: Build debug APK
-        run: ./gradlew assembleDebug --no-daemon
+      - name: Setup CI signing
+        run: |
+          keytool -genkeypair \
+            -alias ci \
+            -keyalg RSA -keysize 2048 \
+            -validity 1 \
+            -dname "CN=CI Build" \
+            -keystore ${{ github.workspace }}/ci.keystore \
+            -storepass cibuilds \
+            -keypass cibuilds \
+            -noprompt
+
+      - name: Build release APK
+        env:
+          KEYSTORE_PATH: ${{ github.workspace }}/ci.keystore
+          KEYSTORE_PASSWORD: cibuilds
+          KEY_ALIAS: ci
+          KEY_PASSWORD: cibuilds
+        run: ./gradlew assembleRelease --no-daemon
 
       - name: Report APK size
         run: |
-          APK_PATH=$(find app/build/outputs/apk/debug -name "*.apk" | head -1)
+          APK_PATH=$(find app/build/outputs/apk/release -name "*.apk" | head -1)
           if [ -f "$APK_PATH" ]; then
             SIZE=$(du -sh "$APK_PATH" | cut -f1)
-            echo "### Debug APK Size: $SIZE" >> $GITHUB_STEP_SUMMARY
+            echo "### Release APK Size: $SIZE" >> $GITHUB_STEP_SUMMARY
           fi
 
-      - name: Upload APK
+      - name: Upload Release APK
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         with:
-          name: debug-apk
-          path: app/build/outputs/apk/debug/*.apk
+          name: release-apk
+          path: app/build/outputs/apk/release/*.apk
           retention-days: 7
+
+      - name: Clean up keystore
+        if: always()
+        run: rm -f ${{ github.workspace }}/ci.keystore

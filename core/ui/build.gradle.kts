@@ -2,10 +2,6 @@ plugins {
     alias(libs.plugins.insight.kmp.compose)
 }
 
-android {
-    namespace = "com.keisardev.insight.core.ui"
-}
-
 compose.resources {
     publicResClass = true
     packageOfResClass = "com.keisardev.insight.core.ui.generated.resources"
@@ -13,6 +9,12 @@ compose.resources {
 }
 
 kotlin {
+    android {
+        namespace = "com.keisardev.insight.core.ui"
+        compileSdk = ProjectConfig.COMPILE_SDK
+        minSdk = ProjectConfig.MIN_SDK
+    }
+
     sourceSets {
         commonMain.dependencies {
             implementation(project(":core:common"))

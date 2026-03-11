@@ -4,10 +4,6 @@ plugins {
     alias(libs.plugins.metro)
 }
 
-android {
-    namespace = "com.keisardev.insight.core.database"
-}
-
 sqldelight {
     databases {
         create("ExpenseDatabase") {
@@ -17,6 +13,12 @@ sqldelight {
 }
 
 kotlin {
+    android {
+        namespace = "com.keisardev.insight.core.database"
+        compileSdk = ProjectConfig.COMPILE_SDK
+        minSdk = ProjectConfig.MIN_SDK
+    }
+
     sourceSets {
         commonMain.dependencies {
             implementation(project(":core:common"))

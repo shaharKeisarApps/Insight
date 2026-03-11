@@ -3,11 +3,13 @@ plugins {
     alias(libs.plugins.kotlin.parcelize)
 }
 
-android {
-    namespace = "com.keisardev.insight.core.common"
-}
-
 kotlin {
+    android {
+        namespace = "com.keisardev.insight.core.common"
+        compileSdk = ProjectConfig.COMPILE_SDK
+        minSdk = ProjectConfig.MIN_SDK
+    }
+
     sourceSets {
         commonMain.dependencies {
             api(libs.kotlinx.coroutines.core)

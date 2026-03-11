@@ -1,27 +1,3 @@
-import com.android.build.api.dsl.CommonExtension
-import org.gradle.api.Project
-import org.gradle.kotlin.dsl.configure
-import org.jetbrains.kotlin.gradle.dsl.KotlinAndroidProjectExtension
-
-internal fun Project.configureKotlinAndroid(
-    commonExtension: CommonExtension<*, *, *, *, *, *>,
-) {
-    commonExtension.apply {
-        compileSdk = ProjectConfig.COMPILE_SDK
-
-        defaultConfig {
-            minSdk = ProjectConfig.MIN_SDK
-        }
-
-        compileOptions {
-            sourceCompatibility = ProjectConfig.JAVA_VERSION
-            targetCompatibility = ProjectConfig.JAVA_VERSION
-        }
-    }
-
-    extensions.configure<KotlinAndroidProjectExtension> {
-        compilerOptions {
-            jvmTarget.set(ProjectConfig.JVM_TARGET)
-        }
-    }
-}
+// Intentionally empty - AGP 9 removed CommonExtension generic helpers.
+// Android configuration is done directly in each convention plugin
+// using their specific extension types (ApplicationExtension, LibraryExtension).

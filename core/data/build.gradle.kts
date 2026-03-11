@@ -4,11 +4,13 @@ plugins {
     alias(libs.plugins.kotlin.serialization)
 }
 
-android {
-    namespace = "com.keisardev.insight.core.data"
-}
-
 kotlin {
+    android {
+        namespace = "com.keisardev.insight.core.data"
+        compileSdk = ProjectConfig.COMPILE_SDK
+        minSdk = ProjectConfig.MIN_SDK
+    }
+
     sourceSets {
         commonMain.dependencies {
             implementation(project(":core:common"))

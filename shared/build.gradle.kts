@@ -5,6 +5,12 @@ plugins {
 }
 
 kotlin {
+    android {
+        namespace = "com.keisardev.insight.shared"
+        compileSdk = ProjectConfig.COMPILE_SDK
+        minSdk = ProjectConfig.MIN_SDK
+    }
+
     listOf(
         iosX64(),
         iosArm64(),
@@ -52,6 +58,3 @@ dependencies {
     add("kspIosSimulatorArm64", libs.circuit.codegen)
 }
 
-android {
-    namespace = "com.keisardev.insight.shared"
-}

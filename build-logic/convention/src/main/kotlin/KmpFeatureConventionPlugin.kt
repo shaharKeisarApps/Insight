@@ -1,4 +1,3 @@
-import com.android.build.gradle.LibraryExtension
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.configure
@@ -20,7 +19,7 @@ class KmpFeatureConventionPlugin : Plugin<Project> {
 
             extensions.configure<KotlinMultiplatformExtension> {
                 sourceSets.apply {
-                    commonMain.dependencies {
+                    getByName("commonMain").dependencies {
                         implementation(project(":core:model"))
                         implementation(project(":core:data"))
                         implementation(project(":core:designsystem"))
@@ -38,15 +37,9 @@ class KmpFeatureConventionPlugin : Plugin<Project> {
                         implementation(compose.components.uiToolingPreview)
                     }
 
-                    androidMain.dependencies {
+                    getByName("androidMain").dependencies {
                         implementation(versionCatalog.findLibrary("kotlinx-coroutines-android").get())
                     }
-                }
-            }
-
-            extensions.configure<LibraryExtension> {
-                defaultConfig {
-                    testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
                 }
             }
 

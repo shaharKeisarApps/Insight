@@ -1,4 +1,3 @@
-import com.android.build.gradle.LibraryExtension
 import org.gradle.api.Plugin
 import org.gradle.api.Project
 import org.gradle.kotlin.dsl.configure
@@ -9,36 +8,15 @@ class KmpLibraryConventionPlugin : Plugin<Project> {
         with(target) {
             with(pluginManager) {
                 apply("org.jetbrains.kotlin.multiplatform")
-                apply("com.android.library")
+                apply("com.android.kotlin.multiplatform.library")
             }
 
             extensions.configure<KotlinMultiplatformExtension> {
-                androidTarget {
-                    compilations.all {
-                        compileTaskProvider.configure {
-                            compilerOptions {
-                                jvmTarget.set(ProjectConfig.JVM_TARGET)
-                            }
-                        }
-                    }
-                }
-
                 iosX64()
                 iosArm64()
                 iosSimulatorArm64()
 
                 applyDefaultHierarchyTemplate()
-            }
-
-            extensions.configure<LibraryExtension> {
-                compileSdk = ProjectConfig.COMPILE_SDK
-                defaultConfig {
-                    minSdk = ProjectConfig.MIN_SDK
-                }
-                compileOptions {
-                    sourceCompatibility = ProjectConfig.JAVA_VERSION
-                    targetCompatibility = ProjectConfig.JAVA_VERSION
-                }
             }
         }
     }
