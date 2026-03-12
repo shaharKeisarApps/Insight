@@ -27,7 +27,6 @@ import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
 import kotlinx.coroutines.withTimeout
-import java.util.Locale
 import kotlin.time.Clock
 import kotlinx.datetime.DatePeriod
 import kotlinx.datetime.LocalDate
@@ -61,7 +60,7 @@ class LlamatikAiService(
     private val currencyProvider: CurrencyProvider,
 ) : AiService {
 
-    @Volatile private var _activeModelFileName: String = ""
+    @kotlin.concurrent.Volatile private var _activeModelFileName: String = ""
 
     private val modelPath: Path?
         get() {
@@ -74,8 +73,8 @@ class LlamatikAiService(
         }
 
     private val mutex = Mutex()
-    @Volatile private var isModelLoaded = false
-    @Volatile private var loadedModelPath: Path? = null
+    @kotlin.concurrent.Volatile private var isModelLoaded = false
+    @kotlin.concurrent.Volatile private var loadedModelPath: Path? = null
 
     override val isEnabled: Boolean
         get() = modelPath != null
@@ -97,7 +96,7 @@ class LlamatikAiService(
             loadedModelPath = null
         }
         if (isModelLoaded) return
-        withContext(Dispatchers.IO) {
+        withContext(Dispatchers.Default) {
             LlamaBridge.initGenerateModel(path.toString())
         }
         isModelLoaded = true
@@ -111,7 +110,7 @@ class LlamatikAiService(
         if (!isEnabled || description.isBlank()) return null
 
         return mutex.withLock {
-            withContext(Dispatchers.IO) {
+            withContext(Dispatchers.Default) {
                 suggestCategoryInternal(description, availableCategories)
             }
         }
@@ -240,10 +239,10 @@ class LlamatikAiService(
                     QuestionType.EXPENSE_QUERY -> {
                         val total = expenseRepository.observeMonthlyTotal(monthStart, monthEnd).first()
                         val breakdown = expenseRepository.observeTotalByCategory(monthStart, monthEnd).first()
-                        appendLine("Total spent: $currencySymbol${String.format(Locale.US, "%.2f", total)}")
+                        appendLine("Total spent: $currencySymbol${formatAmount(total)}")
                         if (breakdown.isNotEmpty()) {
                             breakdown.entries.sortedByDescending { it.value }.forEach { (cat, amt) ->
-                                appendLine("- ${cat.name}: $currencySymbol${String.format(Locale.US, "%.2f", amt)}")
+                                appendLine("- ${cat.name}: $currencySymbol${formatAmount(amt)}")
                             }
                         }
                     }
@@ -251,17 +250,17 @@ class LlamatikAiService(
                         val total = incomeRepository.observeMonthlyTotal(monthStart, monthEnd).first()
                         val breakdown = incomeRepository.observeTotalByCategory(monthStart, monthEnd).first()
                         val recent = incomeRepository.observeAllIncome().first().take(5)
-                        appendLine("Total earned: $currencySymbol${String.format(Locale.US, "%.2f", total)}")
+                        appendLine("Total earned: $currencySymbol${formatAmount(total)}")
                         if (breakdown.isNotEmpty()) {
                             breakdown.entries.sortedByDescending { it.value }.forEach { (cat, amt) ->
-                                appendLine("- ${cat.name}: $currencySymbol${String.format(Locale.US, "%.2f", amt)}")
+                                appendLine("- ${cat.name}: $currencySymbol${formatAmount(amt)}")
                             }
                         }
                         if (recent.isNotEmpty()) {
                             appendLine("Recent income:")
                             recent.forEach { income ->
                                 val desc = if (income.description.isNotBlank()) " - ${income.description}" else ""
-                                appendLine("- ${income.date}: ${income.category.name}, $currencySymbol${String.format(Locale.US, "%.2f", income.amount)}$desc")
+                                appendLine("- ${income.date}: ${income.category.name}, $currencySymbol${formatAmount(income.amount)}$desc")
                             }
                         }
                     }
@@ -270,14 +269,14 @@ class LlamatikAiService(
                         if (breakdown.isNotEmpty()) {
                             appendLine("Expense categories:")
                             breakdown.entries.sortedByDescending { it.value }.forEach { (cat, amt) ->
-                                appendLine("- ${cat.name}: $currencySymbol${String.format(Locale.US, "%.2f", amt)}")
+                                appendLine("- ${cat.name}: $currencySymbol${formatAmount(amt)}")
                             }
                         }
                         val incomeBreakdown = incomeRepository.observeTotalByCategory(monthStart, monthEnd).first()
                         if (incomeBreakdown.isNotEmpty()) {
                             appendLine("Income categories:")
                             incomeBreakdown.entries.sortedByDescending { it.value }.forEach { (cat, amt) ->
-                                appendLine("- ${cat.name}: $currencySymbol${String.format(Locale.US, "%.2f", amt)}")
+                                appendLine("- ${cat.name}: $currencySymbol${formatAmount(amt)}")
                             }
                         }
                     }
@@ -288,14 +287,14 @@ class LlamatikAiService(
                             appendLine("Recent expenses:")
                             recentExpenses.forEach { expense ->
                                 val desc = if (expense.description.isNotBlank()) " - ${expense.description}" else ""
-                                appendLine("- ${expense.date}: ${expense.category.name}, $currencySymbol${String.format(Locale.US, "%.2f", expense.amount)}$desc")
+                                appendLine("- ${expense.date}: ${expense.category.name}, $currencySymbol${formatAmount(expense.amount)}$desc")
                             }
                         }
                         if (recentIncomes.isNotEmpty()) {
                             appendLine("Recent income:")
                             recentIncomes.forEach { income ->
                                 val desc = if (income.description.isNotBlank()) " - ${income.description}" else ""
-                                appendLine("- ${income.date}: ${income.category.name}, $currencySymbol${String.format(Locale.US, "%.2f", income.amount)}$desc")
+                                appendLine("- ${income.date}: ${income.category.name}, $currencySymbol${formatAmount(income.amount)}$desc")
                             }
                         }
                     }
@@ -304,8 +303,8 @@ class LlamatikAiService(
                         val incTotal = incomeRepository.observeMonthlyTotal(monthStart, monthEnd).first()
                         val prevExpTotal = expenseRepository.observeMonthlyTotal(prevMonthStart, prevMonthEnd).first()
                         val prevIncTotal = incomeRepository.observeMonthlyTotal(prevMonthStart, prevMonthEnd).first()
-                        appendLine("This month: spent $currencySymbol${String.format(Locale.US, "%.2f", expTotal)}, earned $currencySymbol${String.format(Locale.US, "%.2f", incTotal)}")
-                        appendLine("Last month (${prevMonthEnd.month}): spent $currencySymbol${String.format(Locale.US, "%.2f", prevExpTotal)}, earned $currencySymbol${String.format(Locale.US, "%.2f", prevIncTotal)}")
+                        appendLine("This month: spent $currencySymbol${formatAmount(expTotal)}, earned $currencySymbol${formatAmount(incTotal)}")
+                        appendLine("Last month (${prevMonthEnd.month}): spent $currencySymbol${formatAmount(prevExpTotal)}, earned $currencySymbol${formatAmount(prevIncTotal)}")
                     }
                     QuestionType.GENERAL -> {
                         // Full data fetch (fallback)
@@ -318,39 +317,39 @@ class LlamatikAiService(
                         val prevIncTotal = incomeRepository.observeMonthlyTotal(prevMonthStart, prevMonthEnd).first()
                         val incCatBreakdown = incomeRepository.observeTotalByCategory(monthStart, monthEnd).first()
 
-                        appendLine("Total spent: $currencySymbol${String.format(Locale.US, "%.2f", expTotal)}")
-                        appendLine("Total earned: $currencySymbol${String.format(Locale.US, "%.2f", incTotal)}")
+                        appendLine("Total spent: $currencySymbol${formatAmount(expTotal)}")
+                        appendLine("Total earned: $currencySymbol${formatAmount(incTotal)}")
                         val net = incTotal - expTotal
-                        if (net >= 0) appendLine("Saved: $currencySymbol${String.format(Locale.US, "%.2f", net)}")
-                        else appendLine("Overspent: $currencySymbol${String.format(Locale.US, "%.2f", -net)}")
+                        if (net >= 0) appendLine("Saved: $currencySymbol${formatAmount(net)}")
+                        else appendLine("Overspent: $currencySymbol${formatAmount(-net)}")
 
                         if (prevExpTotal > 0 || prevIncTotal > 0) {
-                            appendLine("Last month (${prevMonthEnd.month}): spent $currencySymbol${String.format(Locale.US, "%.2f", prevExpTotal)}, earned $currencySymbol${String.format(Locale.US, "%.2f", prevIncTotal)}")
+                            appendLine("Last month (${prevMonthEnd.month}): spent $currencySymbol${formatAmount(prevExpTotal)}, earned $currencySymbol${formatAmount(prevIncTotal)}")
                         }
                         if (catBreakdown.isNotEmpty()) {
                             appendLine("Expense categories:")
                             catBreakdown.entries.sortedByDescending { it.value }.forEach { (cat, amt) ->
-                                appendLine("- ${cat.name}: $currencySymbol${String.format(Locale.US, "%.2f", amt)}")
+                                appendLine("- ${cat.name}: $currencySymbol${formatAmount(amt)}")
                             }
                         }
                         if (incCatBreakdown.isNotEmpty()) {
                             appendLine("Income categories:")
                             incCatBreakdown.entries.sortedByDescending { it.value }.forEach { (cat, amt) ->
-                                appendLine("- ${cat.name}: $currencySymbol${String.format(Locale.US, "%.2f", amt)}")
+                                appendLine("- ${cat.name}: $currencySymbol${formatAmount(amt)}")
                             }
                         }
                         if (recentExpenses.isNotEmpty()) {
                             appendLine("Recent expenses:")
                             recentExpenses.forEach { expense ->
                                 val desc = if (expense.description.isNotBlank()) " - ${expense.description}" else ""
-                                appendLine("- ${expense.date}: ${expense.category.name}, $currencySymbol${String.format(Locale.US, "%.2f", expense.amount)}$desc")
+                                appendLine("- ${expense.date}: ${expense.category.name}, $currencySymbol${formatAmount(expense.amount)}$desc")
                             }
                         }
                         if (recentIncomes.isNotEmpty()) {
                             appendLine("Recent income:")
                             recentIncomes.forEach { income ->
                                 val desc = if (income.description.isNotBlank()) " - ${income.description}" else ""
-                                appendLine("- ${income.date}: ${income.category.name}, $currencySymbol${String.format(Locale.US, "%.2f", income.amount)}$desc")
+                                appendLine("- ${income.date}: ${income.category.name}, $currencySymbol${formatAmount(income.amount)}$desc")
                             }
                         }
                     }
@@ -545,7 +544,7 @@ class LlamatikAiService(
         expenseRepository.insertExpense(expense)
 
         val desc = if (!intent.description.isNullOrBlank()) " (${intent.description})" else ""
-        return "Added expense: $currencySymbol${String.format(Locale.US, "%.2f", amount)} in ${category.name} on $today$desc"
+        return "Added expense: $currencySymbol${formatAmount(amount)} in ${category.name} on $today$desc"
     }
 
     private suspend fun executeAddIncome(intent: UserIntent, currencySymbol: String): String {
@@ -573,7 +572,7 @@ class LlamatikAiService(
         incomeRepository.insertIncome(income)
 
         val desc = if (!intent.description.isNullOrBlank()) " (${intent.description})" else ""
-        return "Added income: $currencySymbol${String.format(Locale.US, "%.2f", amount)} in ${incomeCategory.name} on $today$desc"
+        return "Added income: $currencySymbol${formatAmount(amount)} in ${incomeCategory.name} on $today$desc"
     }
 
     private fun buildSystemPrompt(
@@ -664,11 +663,11 @@ class LlamatikAiService(
                     val total = expenseRepository.observeMonthlyTotal(monthStart, monthEnd).first()
                     val breakdown = expenseRepository.observeTotalByCategory(monthStart, monthEnd).first()
                     buildString {
-                        append("You spent $currencySymbol${String.format(Locale.US, "%.2f", total)} this month")
+                        append("You spent $currencySymbol${formatAmount(total)} this month")
                         if (breakdown.isNotEmpty()) {
                             append(" across ${breakdown.size} ${if (breakdown.size == 1) "category" else "categories"}.")
                             breakdown.entries.sortedByDescending { it.value }.forEach { (cat, amt) ->
-                                append("\n- ${cat.name}: $currencySymbol${String.format(Locale.US, "%.2f", amt)}")
+                                append("\n- ${cat.name}: $currencySymbol${formatAmount(amt)}")
                             }
                         } else {
                             append(". No expenses recorded yet.")
@@ -679,11 +678,11 @@ class LlamatikAiService(
                     val total = incomeRepository.observeMonthlyTotal(monthStart, monthEnd).first()
                     val breakdown = incomeRepository.observeTotalByCategory(monthStart, monthEnd).first()
                     buildString {
-                        append("You earned $currencySymbol${String.format(Locale.US, "%.2f", total)} this month")
+                        append("You earned $currencySymbol${formatAmount(total)} this month")
                         if (breakdown.isNotEmpty()) {
                             append(".")
                             breakdown.entries.sortedByDescending { it.value }.forEach { (cat, amt) ->
-                                append("\n- ${cat.name}: $currencySymbol${String.format(Locale.US, "%.2f", amt)}")
+                                append("\n- ${cat.name}: $currencySymbol${formatAmount(amt)}")
                             }
                         } else {
                             append(". No income recorded yet.")
@@ -697,13 +696,13 @@ class LlamatikAiService(
                         if (expBreakdown.isNotEmpty()) {
                             appendLine("Expense categories this month:")
                             expBreakdown.entries.sortedByDescending { it.value }.forEach { (cat, amt) ->
-                                appendLine("- ${cat.name}: $currencySymbol${String.format(Locale.US, "%.2f", amt)}")
+                                appendLine("- ${cat.name}: $currencySymbol${formatAmount(amt)}")
                             }
                         }
                         if (incBreakdown.isNotEmpty()) {
                             appendLine("Income categories this month:")
                             incBreakdown.entries.sortedByDescending { it.value }.forEach { (cat, amt) ->
-                                appendLine("- ${cat.name}: $currencySymbol${String.format(Locale.US, "%.2f", amt)}")
+                                appendLine("- ${cat.name}: $currencySymbol${formatAmount(amt)}")
                             }
                         }
                         if (expBreakdown.isEmpty() && incBreakdown.isEmpty()) {
@@ -719,14 +718,14 @@ class LlamatikAiService(
                             appendLine("Recent expenses:")
                             recentExp.forEach { e ->
                                 val desc = if (e.description.isNotBlank()) " - ${e.description}" else ""
-                                appendLine("- ${e.date}: ${e.category.name}, $currencySymbol${String.format(Locale.US, "%.2f", e.amount)}$desc")
+                                appendLine("- ${e.date}: ${e.category.name}, $currencySymbol${formatAmount(e.amount)}$desc")
                             }
                         }
                         if (recentInc.isNotEmpty()) {
                             appendLine("Recent income:")
                             recentInc.forEach { i ->
                                 val desc = if (i.description.isNotBlank()) " - ${i.description}" else ""
-                                appendLine("- ${i.date}: ${i.category.name}, $currencySymbol${String.format(Locale.US, "%.2f", i.amount)}$desc")
+                                appendLine("- ${i.date}: ${i.category.name}, $currencySymbol${formatAmount(i.amount)}$desc")
                             }
                         }
                         if (recentExp.isEmpty() && recentInc.isEmpty()) {
@@ -740,11 +739,11 @@ class LlamatikAiService(
                     val prevExpTotal = expenseRepository.observeMonthlyTotal(prevMonthStart, prevMonthEnd).first()
                     val prevIncTotal = incomeRepository.observeMonthlyTotal(prevMonthStart, prevMonthEnd).first()
                     buildString {
-                        appendLine("This month (${today.month}): spent $currencySymbol${String.format(Locale.US, "%.2f", expTotal)}, earned $currencySymbol${String.format(Locale.US, "%.2f", incTotal)}")
-                        append("Last month (${prevMonthEnd.month}): spent $currencySymbol${String.format(Locale.US, "%.2f", prevExpTotal)}, earned $currencySymbol${String.format(Locale.US, "%.2f", prevIncTotal)}")
+                        appendLine("This month (${today.month}): spent $currencySymbol${formatAmount(expTotal)}, earned $currencySymbol${formatAmount(incTotal)}")
+                        append("Last month (${prevMonthEnd.month}): spent $currencySymbol${formatAmount(prevExpTotal)}, earned $currencySymbol${formatAmount(prevIncTotal)}")
                         val netChange = (incTotal - expTotal) - (prevIncTotal - prevExpTotal)
-                        if (netChange > 0) append("\nYou're doing $currencySymbol${String.format(Locale.US, "%.2f", netChange)} better than last month.")
-                        else if (netChange < 0) append("\nYou're $currencySymbol${String.format(Locale.US, "%.2f", -netChange)} behind last month.")
+                        if (netChange > 0) append("\nYou're doing $currencySymbol${formatAmount(netChange)} better than last month.")
+                        else if (netChange < 0) append("\nYou're $currencySymbol${formatAmount(-netChange)} behind last month.")
                     }
                 }
                 QuestionType.GENERAL -> null // Fall through to LLM
@@ -771,7 +770,7 @@ class LlamatikAiService(
         // Intent-classified ADD commands need mutex for LLM category suggestion
         if (intent != null) {
             return mutex.withLock {
-                withContext(Dispatchers.IO) {
+                withContext(Dispatchers.Default) {
                     try {
                         withTimeout(LLM_TIMEOUT_MS) {
                             ensureModelLoaded()
@@ -796,7 +795,7 @@ class LlamatikAiService(
 
         // GENERAL questions: fall through to LLM
         return mutex.withLock {
-            withContext(Dispatchers.IO) {
+            withContext(Dispatchers.Default) {
                 try {
                     withTimeout(LLM_TIMEOUT_MS) {
                         ensureModelLoaded()
@@ -838,7 +837,7 @@ class LlamatikAiService(
         // Intent-classified ADD commands: emit result instantly, no LLM needed
         if (intent != null) {
             mutex.withLock {
-                withContext(Dispatchers.IO) {
+                withContext(Dispatchers.Default) {
                     try {
                         withTimeout(LLM_TIMEOUT_MS) {
                             ensureModelLoaded()
@@ -871,7 +870,7 @@ class LlamatikAiService(
         // GENERAL questions: stream tokens from LlamaBridge
         val accumulated = StringBuilder()
 
-        launch(Dispatchers.IO) {
+        launch(Dispatchers.Default) {
             mutex.withLock {
                 try {
                     withTimeout(LLM_TIMEOUT_MS) {
@@ -923,4 +922,12 @@ class LlamatikAiService(
             isModelLoaded = false
         }
     }
+}
+
+/** KMP-compatible money formatter (avoids java.util.Locale). */
+private fun formatAmount(amount: Double): String {
+    val rounded = (amount * 100).toLong()
+    val whole = rounded / 100
+    val fraction = rounded % 100
+    return "${whole}.${fraction.toString().padStart(2, '0')}"
 }

@@ -28,7 +28,7 @@ enum class AiMode {
 }
 
 /**
- * Strategy that delegates to [LlamatikAiService] or [KoogAiService]
+ * Strategy that delegates to [LlamatikAiService] or [CloudAiService]
  * based on the selected [AiMode] and model availability.
  *
  * The mode is persisted via Proto DataStore and survives app restarts.
@@ -38,12 +38,12 @@ enum class AiMode {
 @Inject
 class AiServiceStrategy(
     private val llamatikAiService: LlamatikAiService,
-    private val koogAiService: KoogAiService,
+    private val cloudAiService: CloudAiService,
     private val userSettingsRepository: UserSettingsRepository,
 ) : AiService {
 
-    @Volatile var mode: AiMode = AiMode.AUTO
-    @Volatile private var modeSynced = false
+    @kotlin.concurrent.Volatile var mode: AiMode = AiMode.AUTO
+    @kotlin.concurrent.Volatile private var modeSynced = false
 
     private suspend fun syncModeIfNeeded() {
         if (modeSynced) return
@@ -56,10 +56,10 @@ class AiServiceStrategy(
         get() = llamatikAiService.isEnabled
 
     val isCloudAvailable: Boolean
-        get() = koogAiService.isEnabled
+        get() = cloudAiService.isEnabled
 
     val hasDevKey: Boolean
-        get() = koogAiService.hasDevKey
+        get() = cloudAiService.hasDevKey
 
     fun observeAiMode(): Flow<AiMode> =
         userSettingsRepository.observeSettings().map { it.aiMode.toAiMode() }
@@ -85,8 +85,8 @@ class AiServiceStrategy(
     private val activeService: AiService
         get() = when (mode) {
             AiMode.LOCAL -> llamatikAiService
-            AiMode.CLOUD -> koogAiService
-            AiMode.AUTO -> if (llamatikAiService.isEnabled) llamatikAiService else koogAiService
+            AiMode.CLOUD -> cloudAiService
+            AiMode.AUTO -> if (llamatikAiService.isEnabled) llamatikAiService else cloudAiService
         }
 
     override val isEnabled: Boolean

@@ -16,7 +16,7 @@ kotlin {
     }
 
     sourceSets {
-        androidMain.dependencies {
+        commonMain.dependencies {
             implementation(project(":core:ai"))
         }
     }

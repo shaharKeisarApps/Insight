@@ -32,26 +32,19 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.RadioButton
 import androidx.compose.material3.Text
 import androidx.compose.material3.rememberModalBottomSheetState
-import android.Manifest
-import android.content.pm.PackageManager
-import androidx.activity.compose.rememberLauncherForActivityResult
-import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
-import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.platform.LocalContext
-import org.jetbrains.compose.resources.stringResource
-import com.keisardev.insight.core.ui.generated.resources.Res
-import com.keisardev.insight.core.ui.generated.resources.*
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import com.keisardev.insight.core.model.InstalledModel
 import com.keisardev.insight.core.model.ModelInfo
 import com.keisardev.insight.core.model.ModelState
+import com.keisardev.insight.core.ui.generated.resources.Res
+import com.keisardev.insight.core.ui.generated.resources.*
 import com.keisardev.insight.core.ui.util.formatBytes
+import org.jetbrains.compose.resources.stringResource
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -72,19 +65,6 @@ fun ModelSetupBottomSheet(
     onSelectActiveModel: (String) -> Unit,
     modifier: Modifier = Modifier,
 ) {
-    // Request notification permission when sheet opens (Android 13+)
-    val context = LocalContext.current
-    val permissionLauncher = rememberLauncherForActivityResult(
-        contract = ActivityResultContracts.RequestPermission(),
-    ) { /* Download works regardless — permission is for notification visibility */ }
-    LaunchedEffect(Unit) {
-        if (ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS)
-            != PackageManager.PERMISSION_GRANTED
-        ) {
-            permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
-        }
-    }
-
     val sheetState = rememberModalBottomSheetState(skipPartiallyExpanded = true)
     ModalBottomSheet(
         onDismissRequest = onDismiss,

@@ -34,6 +34,7 @@ kotlin {
             api(project(":core:data"))
             api(project(":core:designsystem"))
             api(project(":core:ui"))
+            api(project(":core:ai"))
             implementation(project(":feature:expenses"))
             implementation(project(":feature:income"))
             implementation(project(":feature:reports"))

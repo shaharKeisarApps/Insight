@@ -1,6 +1,5 @@
 package com.keisardev.insight.core.ai.model
 
-import com.keisardev.insight.core.common.di.AppScope
 import com.keisardev.insight.core.ai.di.ModelsDir
 import com.keisardev.insight.core.data.datastore.UserSettingsRepository
 import com.keisardev.insight.core.model.InstalledModel
@@ -9,6 +8,7 @@ import com.keisardev.insight.core.model.ModelState
 import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
+import com.keisardev.insight.core.common.di.AppScope
 import io.ktor.client.HttpClient
 import io.ktor.client.request.prepareGet
 import io.ktor.client.statement.bodyAsChannel
@@ -23,11 +23,14 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.withContext
+import kotlinx.serialization.json.Json
+import kotlinx.serialization.json.jsonArray
+import kotlinx.serialization.json.jsonObject
+import kotlinx.serialization.json.jsonPrimitive
 import okio.FileSystem
-import okio.IOException
 import okio.Path
 import okio.buffer
-import org.json.JSONArray
+import okio.use
 
 @ContributesBinding(AppScope::class)
 @SingleIn(AppScope::class)
@@ -42,8 +45,8 @@ class ModelRepositoryImpl(
     private val _modelState = MutableStateFlow<ModelState>(ModelState.NotInstalled)
     private val _searchResults = MutableStateFlow<List<ModelInfo>>(emptyList())
     private val _isSearching = MutableStateFlow(false)
-    @Volatile private var downloadJob: Job? = null
-    @Volatile private var _activeModelFileName: String = ""
+    @kotlin.concurrent.Volatile private var downloadJob: Job? = null
+    @kotlin.concurrent.Volatile private var _activeModelFileName: String = ""
 
     override val modelState: StateFlow<ModelState> = _modelState.asStateFlow()
     override val searchResults: StateFlow<List<ModelInfo>> = _searchResults.asStateFlow()
@@ -172,7 +175,7 @@ class ModelRepositoryImpl(
             totalBytes = model.sizeBytes,
         )
 
-        withContext(Dispatchers.IO) {
+        withContext(Dispatchers.Default) {
             val job = coroutineContext[Job]
             downloadJob = job
 
@@ -242,7 +245,7 @@ class ModelRepositoryImpl(
         }
         _isSearching.value = true
         try {
-            val results = withContext(Dispatchers.IO) {
+            val results = withContext(Dispatchers.Default) {
                 val searchUrl = "https://huggingface.co/api/models?search=${query}+gguf&sort=downloads&direction=-1&limit=20"
                 val response = httpClient.prepareGet(searchUrl).execute { it.bodyAsText() }
                 parseSearchResults(response)
@@ -256,7 +259,7 @@ class ModelRepositoryImpl(
     }
 
     override suspend fun deleteModel(fileName: String) {
-        withContext(Dispatchers.IO) {
+        withContext(Dispatchers.Default) {
             val path = modelsDir / fileName
             if (fileSystem.exists(path)) fileSystem.delete(path)
         }
@@ -277,15 +280,15 @@ class ModelRepositoryImpl(
     private fun parseSearchResults(json: String): List<ModelInfo> {
         val results = mutableListOf<ModelInfo>()
         try {
-            val array = JSONArray(json)
-            for (i in 0 until array.length()) {
-                val obj = array.getJSONObject(i)
-                val modelId = obj.getString("modelId")
-                val siblings = obj.optJSONArray("siblings") ?: continue
+            val jsonArray = Json.parseToJsonElement(json).jsonArray
+            for (element in jsonArray) {
+                val obj = element.jsonObject
+                val modelId = obj["modelId"]?.jsonPrimitive?.content ?: continue
+                val siblings = obj["siblings"]?.jsonArray ?: continue
 
-                for (j in 0 until siblings.length()) {
-                    val sibling = siblings.getJSONObject(j)
-                    val filename = sibling.getString("rfilename")
+                for (sibling in siblings) {
+                    val sibObj = sibling.jsonObject
+                    val filename = sibObj["rfilename"]?.jsonPrimitive?.content ?: continue
                     if (!filename.endsWith(".gguf")) continue
                     // Skip very large quantizations
                     if (filename.contains("f32") || filename.contains("f16")) continue

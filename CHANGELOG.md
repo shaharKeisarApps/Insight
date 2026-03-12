@@ -4,6 +4,35 @@ All notable changes to Insight will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## [0.3.0] - 2026-03-12
+
+### Added
+
+- Full iOS app with all 5 screens: Expenses, Income, Reports, AI Chat, Settings
+- On-device AI inference on iOS via Llamatik (same engine as Android)
+- iOS AI Chat presenter with model download, search, and streaming support
+- iOS Settings presenter with AI engine mode switcher, model management, and cloud configuration
+- iOS-specific DI modules: IosBindingsModule, IosAiConfig, IosModelDownloadTrigger
+- Model setup bottom sheet and download progress UI shared across platforms
+
+### Changed
+
+- Converted `core:ai` from Android-only to Kotlin Multiplatform (commonMain/androidMain/iosMain)
+- Moved ModelSetupBottomSheet and ModelDownloadProgress from androidMain to commonMain
+- Upgraded Metro DI from 0.9.2 to 0.11.2 — fixes Kotlin/Native graph transform failures
+- Upgraded Koog AI agents to KMP artifacts (non-JVM-suffixed)
+- Replaced `java.util.concurrent.atomic` with `kotlinx.atomicfu` in shared AI code
+- Replaced `Dispatchers.IO` with `Dispatchers.Default` in shared code for native compatibility
+- Replaced `org.json.JSONArray` with `kotlinx.serialization.json` in ModelRepositoryImpl
+- Replaced `String.format(Locale)` with pure-Kotlin number formatting for multiplatform
+
+### Architecture
+
+- Koog tools (reflection-based) remain Android-only in `androidMain`
+- New `CloudAiService` interface abstracts cloud AI — KoogAiService on Android, no-op on iOS
+- IosBindingsModule provides manual @Provides bindings for cross-module resolution on native
+- IosCircuitModule manually wires all Circuit presenter/UI factories for iOS
+
 ## [0.2.0] - 2026-03-06
 
 ### Added

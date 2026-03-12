@@ -11,6 +11,7 @@ import com.keisardev.insight.core.model.ChatRole
 import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
+import kotlinx.atomicfu.atomic
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.TimeoutCancellationException
 import kotlinx.coroutines.flow.Flow
@@ -25,8 +26,6 @@ import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withTimeout
 import kotlin.time.Clock
 import kotlinx.datetime.Instant
-import java.util.concurrent.atomic.AtomicBoolean
-import java.util.concurrent.atomic.AtomicLong
 
 /**
  * Implementation of [ChatRepository] that manages in-memory chat state
@@ -48,8 +47,8 @@ class ChatRepositoryImpl(
     private val _messages = MutableStateFlow<List<ChatMessage>>(emptyList())
     private val _isLoading = MutableStateFlow(false)
     private val mutex = Mutex()
-    private val messageCounter = AtomicLong(0)
-    private val hydrated = AtomicBoolean(false)
+    private val messageCounter = atomic(0L)
+    private val hydrated = atomic(false)
 
     override val isEnabled: Boolean
         get() = aiService.isEnabled
