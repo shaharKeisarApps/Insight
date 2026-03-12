@@ -7,6 +7,8 @@ import ai.koog.agents.ext.agent.chatAgentStrategy
 import ai.koog.prompt.executor.llms.SingleLLMPromptExecutor
 import ai.koog.prompt.executor.llms.all.simpleGoogleAIExecutor
 import ai.koog.prompt.executor.llms.all.simpleOpenAIExecutor
+import ai.koog.prompt.executor.clients.google.GoogleModels
+import ai.koog.prompt.executor.clients.openai.OpenAIModels
 import ai.koog.prompt.llm.LLModel
 import com.keisardev.insight.core.ai.config.AiConfig
 import com.keisardev.insight.core.ai.config.CloudModelRegistry
@@ -23,6 +25,7 @@ import com.keisardev.insight.core.data.repository.FinancialSummaryRepository
 import com.keisardev.insight.core.data.repository.IncomeCategoryRepository
 import com.keisardev.insight.core.data.repository.IncomeRepository
 import com.keisardev.insight.core.model.Category
+import dev.zacsweers.metro.ContributesBinding
 import dev.zacsweers.metro.Inject
 import dev.zacsweers.metro.SingleIn
 import kotlinx.coroutines.Dispatchers
@@ -36,11 +39,12 @@ import kotlinx.datetime.TimeZone
 import kotlinx.datetime.toLocalDateTime
 
 /**
- * Implementation of [AiService] using JetBrains Koog framework.
+ * Implementation of [CloudAiService] using JetBrains Koog framework.
  *
  * Supports multiple cloud providers (OpenAI and Gemini) with dynamic executor switching.
  * The executor is cached and reused until the provider/key combination changes.
  */
+@ContributesBinding(AppScope::class)
 @SingleIn(AppScope::class)
 @Inject
 class KoogAiService(
@@ -52,7 +56,7 @@ class KoogAiService(
     private val financialSummaryRepository: FinancialSummaryRepository,
     private val userSettingsRepository: UserSettingsRepository,
     private val currencyProvider: CurrencyProvider,
-) : AiService {
+) : CloudAiService {
 
     /** Key used to detect when the executor needs to be recreated. */
     @Volatile
@@ -85,11 +89,9 @@ class KoogAiService(
     private fun getModel(): LLModel {
         val modelId = aiConfig.selectedModelId
         if (modelId != null) {
-            CloudModelRegistry.findLLModel(modelId)?.let { return it }
+            findLLModel(modelId)?.let { return it }
         }
-        return CloudModelRegistry.findLLModel(
-            CloudModelRegistry.defaultModelId(aiConfig.cloudProvider),
-        )!!
+        return findLLModel(CloudModelRegistry.defaultModelId(aiConfig.cloudProvider))!!
     }
 
     private suspend fun getCurrencySymbol(): String = currencyProvider.getCurrencySymbol()
@@ -102,7 +104,7 @@ class KoogAiService(
         }
     }
 
-    val hasDevKey: Boolean
+    override val hasDevKey: Boolean
         get() = aiConfig.hasDevKey
 
     override val isEnabled: Boolean
@@ -213,7 +215,7 @@ class KoogAiService(
 
         return AIAgent(
             promptExecutor = executor,
-            llmModel = CloudModelRegistry.cheapestModel(aiConfig.cloudProvider),
+            llmModel = cheapestModel(aiConfig.cloudProvider),
             systemPrompt = """
                 You are a categorization assistant. Given a list of expense categories and an expense description,
                 you must respond with ONLY the name of the most appropriate category.
@@ -270,6 +272,27 @@ class KoogAiService(
             } catch (e: Exception) {
                 "Sorry, I encountered an error: ${e.message ?: "Unknown error"}"
             }
+        }
+    }
+
+    companion object {
+        /** Maps model string IDs to Koog LLModel types. */
+        private val llModelMap: Map<String, LLModel> = mapOf(
+            "gpt-4o-mini" to OpenAIModels.Chat.GPT4oMini,
+            "gpt-4o" to OpenAIModels.Chat.GPT4o,
+            "gpt-4.1" to OpenAIModels.Chat.GPT4_1,
+            "gpt-5-nano" to OpenAIModels.Chat.GPT5Nano,
+            "gpt-5-mini" to OpenAIModels.Chat.GPT5Mini,
+            "gemini-2.0-flash" to GoogleModels.Gemini2_0Flash,
+            "gemini-2.5-flash" to GoogleModels.Gemini2_5Flash,
+            "gemini-2.5-pro" to GoogleModels.Gemini2_5Pro,
+        )
+
+        fun findLLModel(modelId: String): LLModel? = llModelMap[modelId]
+
+        fun cheapestModel(provider: CloudProvider): LLModel = when (provider) {
+            CloudProvider.OPENAI -> OpenAIModels.Chat.GPT5Nano
+            CloudProvider.GEMINI -> GoogleModels.Gemini2_0Flash
         }
     }
 }
