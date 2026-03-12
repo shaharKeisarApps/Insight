@@ -13,6 +13,7 @@ kotlin {
         namespace = "com.keisardev.insight.feature.expenses"
         compileSdk = ProjectConfig.COMPILE_SDK
         minSdk = ProjectConfig.MIN_SDK
+        androidResources.enable = true
         withHostTestBuilder {}.configure {}
     }
 

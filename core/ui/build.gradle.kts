@@ -13,6 +13,7 @@ kotlin {
         namespace = "com.keisardev.insight.core.ui"
         compileSdk = ProjectConfig.COMPILE_SDK
         minSdk = ProjectConfig.MIN_SDK
+        androidResources.enable = true
     }
 
     sourceSets {
